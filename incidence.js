@@ -1,26 +1,21 @@
 // Variables used by Scriptable.
 // These must be at the very top of the file. Do not edit.
 // icon-color: deep-gray; icon-glyph: magic;
-// Licence: Robert Koch-Institut (RKI), dl-de/by-2-0
+/**
+ * Licence: Robert Koch-Institut (RKI), dl-de/by-2-0
+ * 
+ * Author: https://github.com/marcelrebmann/
+ * Source: https://github.com/marcelrebmann/corona-widget-ios
+ * 
+ * Version: 1.1.0
+ */
+
 const locationApi = (location) => `https://services7.arcgis.com/mOBPykOjAyBO2ZKk/arcgis/rest/services/RKI_Landkreisdaten/FeatureServer/0/query?where=1%3D1&outFields=OBJECTID,cases7_per_100k,cases7_bl_per_100k,cases,GEN,county,BL,last_update&geometry=${location.longitude.toFixed(3)}%2C${location.latitude.toFixed(3)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelWithin&returnGeometry=false&outSR=4326&f=json`
 const serverApi = (landkreisId) => `https://cdn.marcelrebmann.de/corona/?id=${landkreisId}`
 const VACCINATION_IMG_URL = `https://cdn.marcelrebmann.de/img/vaccine-64.png`
 
-/**
- * User specific configuration.
- * Change the parameters, as you prefer.
- * 
- * - isInfectionsWidgetCentered:
- *   Controls the content alignment of the "INF" widgetmode
- *   true -> The widget content is displayed centered
- *   false -> The widget content is displayed left aligned
- * 
- * - location_cache_filename:
- *   This specifies the file where the widget caches the last retrieved location data.
- *   This is only relevant, if the location is not fixed via widget parameters.
- */
 const CONFIG = {
-    isInfectionsWidgetCentered: true,
+    showTrendCurves: false,
     location_cache_filename: "corona_location.txt",
     data_cache_filename: "corona_widget_data.txt",
     vaccination_image_filename: "vaccine-64.png"
@@ -30,16 +25,32 @@ const WIDGET_MODE = {
     INCIDENCE: "INCIDENCE",
     INFECTIONS: "INFECTIONS"
 }
-
+const INCIDENCE_HEADER = `🦠 INZIDENZ`
+const INFECTIONS_HEADER = `🦠 INFEKTIONEN`
 const WIDGET_SIZE_MEDIUM = "medium"
+
 const INCIDENCE_YELLOW = 35
 const INCIDENCE_RED = 50
 const INCIDENCE_MAGENTA = 200
+
+const COLOR_CYAN = new Color("#21b1f3")
+const COLOR_BLUE = Color.dynamic(Color.blue(), COLOR_CYAN)
 const COLOR_MAGENTA = new Color("#db0080")
+const COLOR_RED = Color.red()
+const COLOR_ORANGE = Color.orange()
+const COLOR_GREEN = Color.green()
+
+const COLOR_LIGHT_GREY = new Color("#e7e7e7")
+const COLOR_GREY = Color.gray()
+const COLOR_BAR_GREY_BG = Color.dynamic(COLOR_LIGHT_GREY, COLOR_GREY)
+
 const COLOR_DARK_BG = new Color("#1c1c1d")
-const COLOR_VACCINATION = new Color("#2196f3")
-const INCIDENCE_HEADER = `🦠 INZIDENZ`
-const INFECTIONS_HEADER = `🦠 INFEKTIONEN`
+const COLOR_LIGHT_TRANSPARENT_BG = new Color("#fff", 0.05)
+const COLOR_DARK_TRANSPARENT_BG = new Color("#1c1c1d", 0.04)
+
+const COLOR_CONTAINER_BG = Color.dynamic(COLOR_DARK_TRANSPARENT_BG, COLOR_LIGHT_TRANSPARENT_BG)
+const COLOR_CHART_TREND = Color.dynamic(new Color("#000", 0.4), new Color("#fff", 0.6))
+
 
 const BUNDESLAENDER_SHORT = {
     'Baden-Württemberg': 'BW',
@@ -51,7 +62,7 @@ const BUNDESLAENDER_SHORT = {
     'Hessen': 'HE',
     'Mecklenburg-Vorpommern': 'MV',
     'Niedersachsen': 'NI',
-    'Nordrhein-Westfalen': 'NRW',
+    'Nordrhein-Westfalen': 'NW',
     'Rheinland-Pfalz': 'RP',
     'Saarland': 'SL',
     'Sachsen': 'SN',
@@ -60,8 +71,20 @@ const BUNDESLAENDER_SHORT = {
     'Thüringen': 'TH'
 }
 
+/**
+ * App specific state.
+ * This is accessed at runtime.
+ */
+const APP_STATE = {
+    widgetSize: "small",
+    isMediumSize: false
+}
+
 class Cache {
 
+    /**
+     * Creates a reusable filemanager for accessing related files.
+     */
     static init() {
         Cache.fileManager = FileManager.local()
         Cache.dataCacheFilePath = Cache.fileManager.joinPath(Cache.fileManager.documentsDirectory(), CONFIG.data_cache_filename)
@@ -118,6 +141,15 @@ class Cache {
         Cache.fileManager.writeString(Cache.dataCacheFilePath, JSON.stringify(cachedData))
     }
 
+    static updateLocation(location) {
+        Cache.fileManager.writeString(Cache.locationCacheFilePath, JSON.stringify(location))
+    }
+
+    /**
+     * Loads and returns the vaccination image.
+     * It tries to load the image from the cache.
+     * If no cached version exists, the image is downloaded and written into the cache.
+     */
     static async loadVaccinationImage() {
         if (Cache.fileManager.fileExists(Cache.vaccinationImageFilePath)) {
             return Cache.fileManager.readImage(Cache.vaccinationImageFilePath)
@@ -127,13 +159,42 @@ class Cache {
             Cache.fileManager.writeImage(Cache.vaccinationImageFilePath, image)
             return loadedImage
         } catch {
-            console.log("[CACHE] could not load vaccination image")
+            console.warn("Could not load vaccination image")
             return;
+        }
+    }
+
+    /**
+     * Tries to load the saved county location from the cache.
+     * This is used to save the current/last known location in adaptive location mode.
+     * If the cache itself does not exist, or no location is cached, {@type null} is returned.
+     */
+    static async loadSavedLocation() {
+        const doesCachedFileExist = Cache.fileManager.fileExists(Cache.locationCacheFilePath)
+
+        if (!doesCachedFileExist) {
+            return null
+        }
+        const fileContents = Cache.fileManager.readString(Cache.locationCacheFilePath)
+
+        try {
+            const savedLoc = JSON.parse(fileContents)
+
+            if (!savedLoc || !savedLoc.latitude || !savedLoc.longitude) {
+                return null
+            }
+            return savedLoc
+        } catch {
+            return null
         }
     }
 }
 Cache.init()
 
+/**
+ * This class contains more generic utility functions that perform calculations
+ * and parsing operations for various purposes.
+ */
 class Utils {
 
     static isNumericValue(number) {
@@ -142,7 +203,7 @@ class Utils {
 
     static shortFormatNumber(number) {
         if (number < 10000) {
-            return `${number}`
+            return `${number.toLocaleString()}`
         } else if (number < 1000000) {
             return `${number % 1000 >= 100 ? (number / 1000).toFixed(1) : Math.floor(number / 1000)}k`.replace(".", ",")
         } else {
@@ -163,39 +224,68 @@ class Utils {
     }
 
     static getNextUpdate(data) {
-        if (!data || !data.rki_updated || !data.landkreis || !data.landkreis.cases7_per_100k_trend || !data.vaccination.last_updated) {
+        if (!data || !data.rki_updated
+            || !data.landkreis
+            || !data.landkreis.cases7_per_100k_trend
+            || !data.vaccination.last_updated
+            || !data.country.r_value_7_days_last_updated) {
             return null
         }
         const last_updated = new Date(data.rki_updated)
-            
-        const vaccination_last_updated = new Date(data.vaccination.last_updated)
-
         last_updated.setDate(last_updated.getDate() + 1)
         last_updated.setHours(0)
+
+        const vaccination_last_updated = new Date(data.vaccination.last_updated)
         vaccination_last_updated.setDate(vaccination_last_updated.getDate() + 1)
         vaccination_last_updated.setHours(0)
         vaccination_last_updated.setMinutes(0)
         vaccination_last_updated.setSeconds(0)
 
-        const moreRecent = Math.min(last_updated.getTime(), vaccination_last_updated.getTime())
+        const rValueLastUpdated = new Date(data.r_value_7_days_last_updated)
+        rValueLastUpdated.setDate(rValueLastUpdated.getDate() + 1)
+        rValueLastUpdated.setHours(0)
+        rValueLastUpdated.setMinutes(0)
+        rValueLastUpdated.setSeconds(0)
+
+        const moreRecent = Math.min(last_updated.getTime(), vaccination_last_updated.getTime(), rValueLastUpdated.getTime())
         return moreRecent > Date.now() ? new Date(moreRecent) : null
     }
 }
 
+/**
+ * Helper class for UI-related operations.
+ * Contains functions to get or construct UI elements.
+ */
 class UiHelpers {
 
+    static setVaccinationImage(image) {
+        UiHelpers.VACCINATION_IMAGE = image
+    }
+
+    static getVaccinationImage() {
+        return UiHelpers.VACCINATION_IMAGE
+    }
+
+    /**
+     * Returns the UI color for incidence values.
+     * @param {*} incidence The incidence value.
+     */
     static getIncidenceColor(incidence) {
         if (incidence >= INCIDENCE_MAGENTA) {
             return COLOR_MAGENTA
         } else if (incidence >= INCIDENCE_RED) {
-            return Color.red()
+            return COLOR_RED
         } else if (incidence >= INCIDENCE_YELLOW) {
-            return Color.orange()
+            return COLOR_ORANGE
         } else {
-            return Color.green()
+            return COLOR_GREEN
         }
     }
 
+    /**
+     * Returns the UI arrow element to visualize the trend.
+     * @param {*} slope The predicted increase/decrease of the data.
+     */
     static getInfectionTrend(slope) {
         if (slope >= 1) {
             return "▲"
@@ -208,18 +298,32 @@ class UiHelpers {
         }
     }
 
-    static getTrendColor(slope) {
-        if (slope > 4) {
-            return Color.red()
-        } else if (slope >= 1) {
-            return Color.orange()
+    /**
+     * Returns the color for trend UI elements according to the predicted
+     * increase/decrease.
+     * A custom factor can be supplied to adjust the interval scale to the scale of the data.
+     * @param {*} slope 
+     * @param {*} factor 
+     */
+    static getTrendColor(slope, factor = 1) {
+        if (slope > (4 * factor)) {
+            return COLOR_RED
+        } else if (slope >= (1 * factor)) {
+            return COLOR_ORANGE
         } else if (slope < 0) {
-            return Color.green()
+            return COLOR_GREEN
         } else {
-            return Color.gray()
+            return COLOR_GREY
         }
     }
 
+    /**
+     * Helper to generate the county name for displaying in the UI.
+     * The identifier "(SK)" is added for Stadtkreise.
+     * If a custom county name is given, it overrides the name received from the data.
+     * @param {*} data The api data
+     * @param {*} customLandkreisName Optional. A custom text label to override the original one.
+     */
     static generateLandkreisName(data, customLandkreisName) {
         if (customLandkreisName) {
             return customLandkreisName
@@ -227,187 +331,343 @@ class UiHelpers {
         return data.landkreis.county.match(/^SK \w+$/) ? `${data.landkreis.GEN} (SK)` : data.landkreis.GEN
     }
 
+    /**
+     * Generates the date string to describe the actuality of the RKI data.
+     * Transforms a numeric timestamp into a date string with the following format: "DD.MM.YYYY"
+     * @param {*} data The data received from the server api
+     */
     static generateDataState(data) {
 
         if (!data.rki_updated) {
-            return `Stand: ${(data.landkreis.last_update || "").substr(0, 10)}`
+            return `  ${(data.landkreis.last_update || "").substr(0, 10)}`
         }
         const date = new Date(data.rki_updated)
         const day = date.getDate()
         const month = date.getMonth() + 1
         const year = date.getFullYear()
-        return `Stand: ${day < 10 ? '0' : ''}${day}.${month < 10 ? '0' : ''}${month}.${year}`
+        return `  ${day < 10 ? '0' : ''}${day}.${month < 10 ? '0' : ''}${month}.${year}`
     }
 
-    static generateFooter(widget, incidence, predictedIncidenceSlope, labelText, isCentered) {
-        const footer = widget.addStack()
-        footer.layoutHorizontally()
-        footer.useDefaultPadding()
-        footer.centerAlignContent()
+    /**
+     * Generates a Ui row for displaying the R-value and the corresponding trend.
+     * @param {*} root 
+     * @param {*} rValue 
+     * @param {*} rValueTrend 
+     * @param {*} label 
+     * @param {*} fontSize 
+     */
+    static rValueRow(root, rValue, rValueTrend, label = "", fontSize = 11) {
+        const rValuePredictedSlope = rValueTrend ? rValueTrend.slope : rValueTrend
 
-        if (isCentered) {
-            footer.addSpacer()
-        }
+        const row = root.addStack()
+        row.centerAlignContent()
+        const rValueMarker = row.addText(`${label}`)
+        rValueMarker.font = Font.boldSystemFont(fontSize)
+        rValueMarker.textColor = COLOR_GREY
 
-        const incidenceLabel = footer.addText(Utils.isNumericValue(incidence) ? `${incidence.toFixed(1).replace(".", ",")}` : "-")
-        incidenceLabel.font = Font.boldSystemFont(12)
-        incidenceLabel.textColor = UiHelpers.getIncidenceColor(incidence)
+        const rValueTrendIconLabel = row.addText(`${UiHelpers.getInfectionTrend(rValuePredictedSlope)}`)
+        rValueTrendIconLabel.font = Font.systemFont(fontSize - 2)
+        rValueTrendIconLabel.textColor = UiHelpers.getTrendColor(rValuePredictedSlope, 0.1)
 
-        const trendIconLabel = footer.addText(` ${UiHelpers.getInfectionTrend(predictedIncidenceSlope)}`)
-        trendIconLabel.font = Font.systemFont(12)
+        const rValueLabel = row.addText(`${Utils.isNumericValue(rValue) ? `${rValue.toFixed(2).replace(".", ",")}` : "-"}`)
+        rValueLabel.font = Font.boldSystemFont(fontSize)
+        rValueLabel.textColor = COLOR_GREY
+    }
+
+    /**
+     * Generates a UI row that displays the incidence value for a county/state/country and the corresponding trend.
+     * @param {*} root The UI element where the row will be added to.
+     * @param {*} incidence The incidence value.
+     * @param {*} indicenceTrend The incidence trend data. Contains a slope value and a predicted value.
+     * @param {*} label Text to render in front of the incidence value.
+     * @param {*} fontSize The font size of the row elements.
+     */
+    static indicenceRow(root, incidence, indicenceTrend, label, fontSize = 11) {
+        const predictedIncidenceSlope = indicenceTrend ? indicenceTrend.slope : indicenceTrend
+
+        const row = root.addStack()
+        row.centerAlignContent()
+
+        const labelText = row.addText(`${label}`)
+        labelText.font = Font.boldSystemFont(fontSize)
+        labelText.textColor = COLOR_GREY
+
+        const trendIconLabel = row.addText(`${UiHelpers.getInfectionTrend(predictedIncidenceSlope)}`)
+        trendIconLabel.font = Font.systemFont(fontSize - 2)
         trendIconLabel.textColor = UiHelpers.getTrendColor(predictedIncidenceSlope)
 
-        const label = footer.addText(labelText)
-        label.font = Font.systemFont(12)
-        label.textColor = Color.gray()
-
-        if (isCentered) {
-            footer.addSpacer()
-        }
+        const incidenceLabel = row.addText(Utils.isNumericValue(incidence) ? `${incidence.toFixed(1).replace(".", ",")}` : "-")
+        incidenceLabel.font = Font.boldSystemFont(fontSize)
+        incidenceLabel.textColor = UiHelpers.getIncidenceColor(incidence)
     }
 
-    static generateVaccinationInfo(widget, vaccinationImage, vaccinationQuote, vaccinationDelta, lastUpdated, isCentered) {
-        const vaccinationInfo = widget.addStack()
-        vaccinationInfo.centerAlignContent()
-
-        if (isCentered) {
-            vaccinationInfo.addSpacer()
+    /**
+     * Generates a UI row for displaying the vaccination quote and the daily increase.
+     * @param {*} root The UI element where the row will be added to.
+     * @param {*} vaccinationQuote The vaccination quote value to render.
+     * @param {*} vaccinationDelta The daily increase of total vaccinations.
+     * @param {*} dataTimestamp The timestamp of the data.
+     * @param {*} layout The layout of the row elements. "v" - vertical, "h" - horizontal (default)
+     * @param {*} drawChart If true, the vaccination quote will be visualized with a progress bar chart.
+     */
+    static vaccinationRow(root, vaccinationQuote, vaccinationDelta, dataTimestamp, layout = "h", drawChart = false) {
+        const row = root.addStack()
+        let row1 = row;
+        if (layout === "v") {
+            row.layoutVertically()
+            row1 = row.addStack()
+            row1.centerAlignContent()
         }
-    
-        const vaccPercent = vaccinationInfo.addText(`${Utils.isNumericValue(vaccinationQuote) ? `${vaccinationQuote.toFixed(1).replace(".", ",")}` : "-"}% `)
-        vaccPercent.font = Font.boldSystemFont(12)
-        vaccPercent.textColor = COLOR_VACCINATION
+        row.centerAlignContent()
 
-        if (vaccinationImage) {
-            const vaccIcon = vaccinationInfo.addImage(vaccinationImage)
+        const vaccImage = UiHelpers.getVaccinationImage()
+        if (vaccImage) {
+            const vaccIcon = row1.addImage(vaccImage)
             vaccIcon.imageSize = new Size(10, 10)
         }
-    
-        const vaccDelta = vaccinationInfo.addText(Utils.isNumericValue(vaccinationDelta) ? ` (+${Utils.shortFormatNumber(vaccinationDelta)})` : "")
-        vaccDelta.font = Font.systemFont(12)
-        vaccDelta.textColor = Color.gray()
 
-        const dataTime = new Date(lastUpdated)
+        const vaccPercent = row1.addText(`${vaccImage ? " " : ""}${Utils.isNumericValue(vaccinationQuote) ? `${vaccinationQuote.toFixed(vaccinationQuote >= 10 ? 1 : 2).replace(".", ",")}` : "-"}%`)
+        vaccPercent.font = Font.boldSystemFont(11)
+        vaccPercent.textColor = COLOR_BLUE
+
+        if (drawChart) {
+            UiHelpers.drawProgressBar(row, vaccinationQuote)
+        }
+
+        const vaccDelta = row.addText(Utils.isNumericValue(vaccinationDelta) ? `+${Utils.shortFormatNumber(vaccinationDelta)}` : "")
+        vaccDelta.font = Font.boldSystemFont(9)
+        vaccDelta.textColor = COLOR_GREY
+
+        const dataTime = new Date(dataTimestamp)
         dataTime.setDate(dataTime.getDate() + 1)
         dataTime.setHours(0)
         dataTime.setMinutes(0)
         dataTime.setSeconds(0)
-        
+
         if (Date.now() > dataTime.getTime()) {
-            vaccinationInfo.addText(" ")
-            const icon = SFSymbol.named("exclamationmark.arrow.circlepath")
-            const outdatedIndicator = vaccinationInfo.addImage(icon.image)
-            outdatedIndicator.imageSize = new Size(12, 12)
-            outdatedIndicator.tintColor = Color.gray()
+            const icon = SFSymbol.named("exclamationmark.arrow.triangle.2.circlepath")
+            const outdatedIndicator = row1.addImage(icon.image)
+            outdatedIndicator.imageSize = new Size(8, 8)
+            outdatedIndicator.tintColor = COLOR_GREY
         }
-    
-        if (isCentered) {
-            vaccinationInfo.addSpacer()
+    }
+
+    /**
+     * Generates a vertical row separator symbol.
+     * The left and right space from the separator can be disabled, if needed.
+     * @param {*} root The UI element to draw the chart into.
+     * @param {*} fontSize The font size of the separator. Adjust this to match the size of the elements to separate.
+     * @param {*} textColor The color of the separator.
+     * @param {*} withSpace If true, a whitespace character will be added before and after the separator.
+     */
+    static rowSeparator(root, fontSize = 12, textColor = COLOR_GREY, withSpace = true) {
+        const separator = root.addText(withSpace ? " | " : "|")
+        separator.font = Font.systemFont(fontSize)
+        separator.textColor = textColor
+    }
+
+    /**
+     * Visualizes given data in a bar chart and places the chart into a given UI element.
+     * @param {*} root The UI element to draw the chart into.
+     * @param {*} historyData The array of values to display as bars.
+     * @param {*} height The height of the bar chart.
+     * @param {*} width The width of the bar chart.
+     * @param {*} barSpace The space between the bars.
+     */
+    static drawBarChart(root, historyData, height = 12, width = 40, barSpace = 2) {
+        if (!historyData || !historyData.length) {
+            return;
         }
+        const barCount = historyData.length
+        const maxValue = Math.max(...historyData)
+        const ctx = new DrawContext()
+        ctx.opaque = false
+        ctx.size = new Size(width, height)
+        ctx.respectScreenScale = true
+        const barWidth = (width - (barSpace * (historyData.length - 1))) / historyData.length
+
+        const barPositions = []
+
+        for (let i = 0; i < historyData.length; i++) {
+            const dataPoint = historyData[i]
+            const barX = (i === 0) ? barWidth * i : barWidth * i + (barSpace * i)
+            const barHeight = (dataPoint / maxValue) * height
+            const bar = new Rect(barX, height - barHeight, barWidth, barHeight) // x, y, rect width, rect height
+            ctx.setFillColor(UiHelpers.getIncidenceColor(dataPoint))
+            ctx.fill(bar)
+            barPositions.push({ x: barX + (0.5 * barWidth), y: height - barHeight })
+        }
+
+        const xAxis = new Path()
+        xAxis.move(new Point(0, height))
+        xAxis.addLine(new Point(width, height))
+
+        ctx.setStrokeColor(COLOR_GREY)
+        ctx.setLineWidth(1)
+
+        ctx.addPath(xAxis)
+        ctx.strokePath(xAxis)
+
+        if (CONFIG.showTrendCurves) {
+            UiHelpers.drawBarChart(ctx, barPositions, height)
+        }
+
+        const container = root.addStack()
+        container.size = new Size(width, height)
+        container.addImage(ctx.getImage())
+    }
+
+    /**
+     * Visualizes given data in a progress bar chart (from 0 to 100%) and places the chart into a given UI element.
+     * @param {*} root The UI element to draw the chart into.
+     * @param {*} value The progress value to display. Should be between 0 and 1.
+     * @param {*} width The chart width.
+     * @param {*} height The chart height.
+     * @param {*} barHeight The height of the bars.
+     * @param {*} barCount How many bars to render.
+     * @param {*} barSpace The space between the bars.
+     */
+    static drawProgressBar(root, value, width = 44, height = 9, barHeight = 7, barCount = 10, barSpace = 2) {
+        const filledBars = Math.floor(value / barCount)
+        const barWidth = (width - (barSpace * (barCount - 1))) / barCount
+
+        const chart = root.addStack()
+        chart.size = new Size(width, height)
+        chart.spacing = barSpace
+
+        for (let i = 0; i < barCount; i++) {
+            const isBarFilled = i <= filledBars
+            const bar = chart.addStack()
+            bar.size = new Size(barWidth, barHeight)
+            bar.backgroundColor = isBarFilled ? COLOR_BLUE : COLOR_BAR_GREY_BG
+        }
+    }
+
+    /**
+     * Draws a trend line into a bar chart.
+     * @param {*} drawContext The canvas element of the chart.
+     * @param {*} barPositions The x/y coordinates of the rendered bars in the chart.
+     * @param {*} chartHeight The overall chart height.
+     */
+    static drawTrendLine(drawContext, barPositions, chartHeight) {
+
+        if (!drawContext || !barPositions || !barPositions.length) {
+            return;
+        }
+        const trendLine = new Path()
+        trendLine.move(new Point(barPositions[0].x, UiHelpers.trendOffset(barPositions[0].y, chartHeight)))
+        const lastBar = barPositions[barPositions.length - 1]
+        const middle = barPositions[Math.floor(barPositions.length / 2)]
+        trendLine.addCurve(
+            new Point(lastBar.x, UiHelpers.trendOffset(lastBar.y, chartHeight)),
+            new Point(barPositions[0].x, UiHelpers.trendOffset(barPositions[0].y, chartHeight)),
+            new Point(middle.x, UiHelpers.trendOffset(middle.y, chartHeight))
+        )
+        drawContext.setStrokeColor(COLOR_CHART_TREND)
+        drawContext.setLineWidth(1)
+        drawContext.addPath(trendLine)
+        drawContext.strokePath(trendLine)
+    }
+
+    /**
+     * Calculates the position for drawing smoothed trend lines into bar charts.
+     * @param {*} barY 
+     * @param {*} height 
+     */
+    static trendOffset(barY, height) {
+        return Math.min(barY + 3, height - 1)
     }
 }
 
-async function loadData(location, isLocationFlexible) {
-    const cachedData = isLocationFlexible ? undefined : Cache.get(location)
-    let rkiObjectId;
-    let rkiData;
+class DataService {
 
-    if (!cachedData || !cachedData.landkreis) {
-        rkiData = await new Request(locationApi(location)).loadJSON()
-        const isRkiDataValid = rkiData && rkiData.features && rkiData.features.length && rkiData.features[0].attributes
+    static async loadData(location, isLocationFlexible) {
+        const cachedData = isLocationFlexible ? undefined : Cache.get(location)
+        let rkiObjectId;
+        let rkiData;
 
-        if (!isRkiDataValid) {
-            return null
-        }
-        rkiObjectId = rkiData.features[0].attributes.OBJECTID
-    } else {
-        rkiObjectId = cachedData.landkreis.OBJECTID
-    }
+        if (!cachedData || !cachedData.landkreis) {
+            rkiData = await new Request(locationApi(location)).loadJSON()
+            const isRkiDataValid = rkiData && rkiData.features && rkiData.features.length && rkiData.features[0].attributes
 
-    const apiData = await new Request(serverApi(rkiObjectId)).loadJSON()
-    try {
-        if (!apiData && !cachedData) {
-            throw "No data - use RKI fallback data without trend"
+            if (!isRkiDataValid) {
+                return null
+            }
+            rkiObjectId = rkiData.features[0].attributes.OBJECTID
+        } else {
+            rkiObjectId = cachedData.landkreis.OBJECTID
         }
 
-        if (!apiData && !!cachedData) {
-            return cachedData
-        }
-        const isCacheUpdateNeeded = !isLocationFlexible && (!cachedData || apiData.rki_updated > (cachedData.rki_updated || 0))
+        const apiData = await new Request(serverApi(rkiObjectId)).loadJSON()
+        try {
+            if (!apiData && !cachedData) {
+                throw "No data - use RKI fallback data without trend"
+            }
 
-        if (isCacheUpdateNeeded) {
-            Cache.update(location, apiData)
-        }
-        return apiData
-    } catch {
-        return {
-            landkreis: {
-                ...rkiData.features[0].attributes,
-                cases7_per_100k_trend: {},
-                cases7_bl_per_100k_trend: {}
-            },
-            country: {
-                cases7_de_per_100k_trend: {}
+            if (!apiData && !!cachedData) {
+                return cachedData
+            }
+            const isCacheUpdateNeeded = !isLocationFlexible && (!cachedData || apiData.rki_updated > (cachedData.rki_updated || 0))
+
+            if (isCacheUpdateNeeded) {
+                Cache.update(location, apiData)
+            }
+            return apiData
+        } catch {
+            return {
+                landkreis: {
+                    ...rkiData.features[0].attributes,
+                    cases7_per_100k_trend: {},
+                    cases7_bl_per_100k_trend: {}
+                },
+                country: {
+                    cases7_de_per_100k_trend: {}
+                }
             }
         }
     }
-}
 
-async function loadAbsoluteCases() {
-    const data = await new Request(serverApi(1)).loadJSON()
+    static async loadAbsoluteCases() {
+        const data = await new Request(serverApi(1)).loadJSON()
 
-    if (!data) {
-        return null
-    }
-    return data
-}
-
-async function loadSavedLocation() {
-
-    const doesCachedFileExist = Cache.fileManager.fileExists(Cache.locationCacheFilePath)
-
-    if (!doesCachedFileExist) {
-        return null
-    }
-    const fileContents = Cache.fileManager.readString(Cache.locationCacheFilePath)
-
-    try {
-        const savedLoc = JSON.parse(fileContents)
-
-        if (!savedLoc || !savedLoc.latitude || !savedLoc.longitude) {
+        if (!data) {
             return null
         }
-        return savedLoc
-    } catch {
-        return null
+        return data
     }
-}
 
+    static async getLocationFromGps() {
+        try {
+            Location.setAccuracyToThreeKilometers()
+            const gpsLocation = await Location.current()
+            return gpsLocation
+        } catch {
+            return null;
+        }
+    }
 
-async function loadLocation() {
-    const lastKnownLocation = await loadSavedLocation()
-
-    try {
-        Location.setAccuracyToThreeKilometers()
-        const location = await Location.current()
+    static async loadLocation() {
+        const lastKnownLocation = await Cache.loadSavedLocation()
+        const location = await DataService.getLocationFromGps()
 
         if (!location) {
-            throw "No data from fetching location"
+            console.log("No data from fetching location")
+            return {
+                ...lastKnownLocation,
+                isCached: true
+            }
         }
+        const hasLocationChanged = (location.latitude !== lastKnownLocation.latitude || location.longitude !== lastKnownLocation.longitude);
 
-        if (!lastKnownLocation || location.latitude !== lastKnownLocation.latitude || location.longitude !== lastKnownLocation.longitude) {
-            Cache.fileManager.writeString(Cache.locationCacheFilePath, JSON.stringify(location))
+        if (!lastKnownLocation || hasLocationChanged) {
+            Cache.updateLocation(location)
         }
         return location
-    } catch {
-        return {
-            ...lastKnownLocation,
-            isCached: true
-        }
     }
 }
 
-const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlexible, isCached, isMediumSizedWidget, vaccinationImage) => {
+
+const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlexible, isCached) => {
 
     const headerStack = widget.addStack()
     headerStack.layoutHorizontally()
@@ -417,143 +677,180 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
     header.font = Font.mediumSystemFont(13)
 
     if (isLocationFlexible) {
-        headerStack.addSpacer(isMediumSizedWidget ? 10 : null)
+        headerStack.addSpacer(APP_STATE.isMediumSize ? 10 : null)
         const icon = SFSymbol.named(isCached ? "bolt.horizontal.circle" : "location")
         const flexibleLocationIndicator = headerStack.addImage(icon.image)
         flexibleLocationIndicator.imageSize = new Size(14, 14)
-        flexibleLocationIndicator.tintColor = isCached ? Color.gray() : Color.blue()
+        flexibleLocationIndicator.tintColor = isCached ? COLOR_GREY : COLOR_BLUE
     }
-    widget.addSpacer()
 
     if (!data) {
+        widget.addSpacer()
         widget.addText("Keine Ergebnisse für den aktuellen Ort gefunden.")
         return;
     }
+    const stateInfo = widget.addText(UiHelpers.generateDataState(data))
+    stateInfo.font = Font.systemFont(8)
+    stateInfo.textColor = COLOR_GREY
+    widget.addSpacer(10);
 
-    const mainContent = widget.addStack()
-    mainContent.layoutHorizontally()
-    mainContent.useDefaultPadding()
-    mainContent.centerAlignContent()
+    const content = widget.addStack()
+    content.backgroundColor = COLOR_CONTAINER_BG
+    content.cornerRadius = 12
+    content.setPadding(4, 4, 4, 4)
+    content.layoutVertically()
+
+
+    const incidenceRow = content.addStack()
+    incidenceRow.layoutHorizontally()
+    incidenceRow.centerAlignContent()
 
     const isLandkreisIncidenceToBeShortened = Utils.isNumericValue(data.landkreis.cases7_per_100k) && data.landkreis.cases7_per_100k >= 1000;
     const landkreisIncidence = data.landkreis.cases7_per_100k.toFixed(isLandkreisIncidenceToBeShortened ? 0 : 1)
-    const incidenceLabel = mainContent.addText(Utils.isNumericValue(data.landkreis.cases7_per_100k) ? `${landkreisIncidence.replace(".", ",")}` : "-")
+    const incidenceLabel = incidenceRow.addText(Utils.isNumericValue(data.landkreis.cases7_per_100k) ? `${landkreisIncidence.replace(".", ",")}` : "-")
     incidenceLabel.font = Font.boldSystemFont(24)
+    incidenceLabel.minimumScaleFactor = 0.8
     incidenceLabel.textColor = UiHelpers.getIncidenceColor(data.landkreis.cases7_per_100k)
 
-    const landkreisTrendIconLabel = mainContent.addText(` ${UiHelpers.getInfectionTrend(data.landkreis.cases7_per_100k_trend.slope)}`)
+    const landkreisTrendIconLabel = incidenceRow.addText(` ${UiHelpers.getInfectionTrend(data.landkreis.cases7_per_100k_trend.slope)}`)
     landkreisTrendIconLabel.font = Font.systemFont(14)
     landkreisTrendIconLabel.textColor = UiHelpers.getTrendColor(data.landkreis.cases7_per_100k_trend.slope)
 
-    const casesLandkreisIncrease = Utils.isNumericValue(data.landkreis.cases) && Utils.isNumericValue(data.landkreis.cases_previous_day) ? data.landkreis.cases - data.landkreis.cases_previous_day : undefined
-    const casesLandkreisLabel = mainContent.addText(` (${Utils.isNumericValue(casesLandkreisIncrease) ? `${casesLandkreisIncrease >= 0 ? "+" : ""}${casesLandkreisIncrease.toLocaleString()}` : "-"})`)
-    casesLandkreisLabel.font = Font.systemFont(data.landkreis.cases7_per_100k >= 100 && Math.abs(casesLandkreisIncrease) >= 100 ? 10 : 14)
-    casesLandkreisLabel.textColor = Color.gray()
 
-    const landkreisNameLabel = widget.addText(UiHelpers.generateLandkreisName(data, customLandkreisName))
-    landkreisNameLabel.minimumScaleFactor = 0.7
+    incidenceRow.addSpacer()
+
+    const chartStack = incidenceRow.addStack()
+    chartStack.layoutVertically()
+    UiHelpers.drawBarChart(chartStack, data.landkreis.cases7_per_100k_history, 12, 36)
+
+    incidenceRow.addSpacer(APP_STATE.isMediumSize ? null : 4)
+    const casesLandkreisIncrease = Utils.isNumericValue(data.landkreis.cases) && Utils.isNumericValue(data.landkreis.cases_previous_day) ? data.landkreis.cases - data.landkreis.cases_previous_day : undefined
+    const casesLandkreisLabel = chartStack.addText(`${Utils.isNumericValue(casesLandkreisIncrease) ? `${casesLandkreisIncrease >= 0 ? "+" : ""}${casesLandkreisIncrease.toLocaleString()}` : "-"}`)
+    casesLandkreisLabel.font = Font.boldSystemFont(9)
+    casesLandkreisLabel.textColor = COLOR_GREY
+
+    const landkreisNameLabel = content.addText(UiHelpers.generateLandkreisName(data, customLandkreisName))
+    landkreisNameLabel.font = Font.mediumSystemFont(18)
+    landkreisNameLabel.minimumScaleFactor = 0.8
 
     widget.addSpacer()
 
-    UiHelpers.generateFooter(widget, data.landkreis.cases7_bl_per_100k, data.landkreis.cases7_bl_per_100k_trend.slope, ` ${BUNDESLAENDER_SHORT[data.landkreis.BL]}`)
-    UiHelpers.generateVaccinationInfo(
-        widget, 
-        vaccinationImage, 
-        data.vaccination.state.vacc_quote, 
-        data.vaccination.state.vacc_delta, 
-        data.vaccination.last_updated,
-        false)
+    const footer = widget.addStack()
+    footer.useDefaultPadding()
+    footer.centerAlignContent()
 
-    const stateInfo = widget.addText(UiHelpers.generateDataState(data))
-    stateInfo.font = Font.systemFont(10)
-    stateInfo.textColor = Color.gray()
+    if (APP_STATE.isMediumSize) {
+        footer.addSpacer(8)
+    }
+
+    const footerLeft = footer.addStack()
+    footerLeft.layoutVertically()
+    footerLeft.centerAlignContent()
+
+    footer.addSpacer()
+
+    const footerRight = footer.addStack()
+    footerRight.layoutVertically()
+
+    UiHelpers.drawBarChart(footerLeft, data.landkreis.cases7_bl_per_100k_history, 12, 50, 2.5)
+    UiHelpers.indicenceRow(footerLeft,
+        data.landkreis.cases7_bl_per_100k,
+        data.landkreis.cases7_bl_per_100k_trend,
+        `${BUNDESLAENDER_SHORT[data.landkreis.BL]}`
+    )
+    UiHelpers.vaccinationRow(
+        footerRight,
+        data.vaccination.state.vacc_quote,
+        data.vaccination.state.vacc_delta,
+        data.vaccination.last_updated,
+        "v",
+        true
+    )
+
+    if (APP_STATE.isMediumSize) {
+        footer.addSpacer()
+    }
 }
 
-const createInfectionsWidget = (widget, data, vaccinationImage) => {
+const createInfectionsWidget = (widget, data) => {
     const headerLabel = widget.addText(INFECTIONS_HEADER)
     headerLabel.font = Font.mediumSystemFont(13)
 
     if (!data) {
+        widget.addSpacer()
         widget.addText("Keine Fallzahlen verfügbar.")
         return;
     }
     const countryData = data.country
     const infectionsDiff = countryData.new_cases - countryData.new_cases_previous_day
 
+    const stateInfo = widget.addText(UiHelpers.generateDataState(data))
+    stateInfo.font = Font.systemFont(8)
+    stateInfo.textColor = COLOR_GREY
     widget.addSpacer()
-
-    widget.addSpacer(1)
 
     const casesStack = widget.addStack()
 
-    if (CONFIG.isInfectionsWidgetCentered) {
-        casesStack.addSpacer()
-    }
+    casesStack.addSpacer()
+
     const casesLabel = casesStack.addText(`${Utils.isNumericValue(countryData.new_cases) ? countryData.new_cases.toLocaleString() : "-"}`)
     casesLabel.font = Font.boldSystemFont(24)
     casesLabel.minimumScaleFactor = 0.8
 
-    if (CONFIG.isInfectionsWidgetCentered) {
-        casesStack.addSpacer()
-    }
+    casesStack.addSpacer()
 
     const casesDifferenceStack = widget.addStack()
 
-    if (CONFIG.isInfectionsWidgetCentered) {
-        casesDifferenceStack.addSpacer()
-    }
+    casesDifferenceStack.addSpacer()
+
     const casesTrendIcon = casesDifferenceStack.addText(UiHelpers.getInfectionTrend(countryData.new_cases - countryData.new_cases_previous_day))
     casesTrendIcon.font = Font.systemFont(14)
     casesTrendIcon.textColor = UiHelpers.getTrendColor(infectionsDiff)
 
     const casesDiffLabel = casesDifferenceStack.addText(Utils.isNumericValue(infectionsDiff) ? ` (${infectionsDiff >= 0 ? '+' : ''}${infectionsDiff.toLocaleString()})` : "-")
     casesDiffLabel.font = Font.systemFont(14)
-    casesDiffLabel.textColor = Color.gray()
+    casesDiffLabel.textColor = COLOR_GREY
 
-    if (CONFIG.isInfectionsWidgetCentered) {
-        casesDifferenceStack.addSpacer()
-    }
+    casesDifferenceStack.addSpacer()
 
     widget.addSpacer()
 
-    const deTrendSlope = countryData.cases7_de_per_100k_trend ? countryData.cases7_de_per_100k_trend.slope : countryData.cases7_de_per_100k_trend
-    UiHelpers.generateFooter(widget, countryData.cases7_de_per_100k, deTrendSlope, " DE", CONFIG.isInfectionsWidgetCentered)
+    const footer = widget.addStack()
+    footer.centerAlignContent()
 
-    UiHelpers.generateVaccinationInfo(
-        widget, 
-        vaccinationImage, 
-        data.vaccination.country.vacc_quote, 
-        data.vaccination.country.vacc_delta, 
+    const footerLeft = footer.addStack()
+    footerLeft.layoutVertically()
+
+    UiHelpers.rValueRow(footerLeft, countryData.r_value_7_days, countryData.r_value_7_days_trend, "R ", 10)
+    UiHelpers.drawBarChart(footerLeft, countryData.cases7_de_per_100k_history, 12, 50, 3)
+    UiHelpers.indicenceRow(footerLeft, countryData.cases7_de_per_100k, countryData.cases7_de_per_100k_trend, "DE")
+
+    footer.addSpacer()
+
+    const footerRight = footer.addStack()
+    footerRight.layoutVertically()
+
+    UiHelpers.vaccinationRow(
+        footerRight,
+        data.vaccination.country.vacc_quote,
+        data.vaccination.country.vacc_delta,
         data.vaccination.last_updated,
-        CONFIG.isInfectionsWidgetCentered)
-
-    widget.addSpacer(2)
-
-    const stateInfo = widget.addStack()
-
-    if (CONFIG.isInfectionsWidgetCentered) {
-        stateInfo.addSpacer()
-    }
-    const updateLabel = stateInfo.addText(UiHelpers.generateDataState(data))
-    updateLabel.font = Font.systemFont(10)
-    updateLabel.textColor = Color.gray()
-
-    if (CONFIG.isInfectionsWidgetCentered) {
-        stateInfo.addSpacer()
-    }
+        "v",
+        true
+    )
 }
 
 let widget = await createWidget(config.widgetFamily)
 
 if (!config.runsInWidget) {
-    await widget.presentMedium()
+    await widget.presentSmall()
 }
-
 Script.setWidget(widget)
 Script.complete()
 
 async function createWidget(size) {
-    const isMediumSizedWidget = size === WIDGET_SIZE_MEDIUM
+    APP_STATE.isMediumSize = size === WIDGET_SIZE_MEDIUM
+    APP_STATE.widgetSize = size
     let location = {};
     let customLandkreisName;
     let widgetMode = WIDGET_MODE.INCIDENCE;
@@ -563,9 +860,10 @@ async function createWidget(size) {
     // const params = ["48.6406978", "9.1391464"] // Böblingen
     const widget = new ListWidget()
     widget.backgroundColor = Color.dynamic(Color.white(), COLOR_DARK_BG)
+    widget.setPadding(12, 12, 12, 12)
 
     if (!params) {
-        location = await loadLocation()
+        location = await DataService.loadLocation()
 
         if (!location) {
             widget.addText("Standort konnte nicht ermittelt werden.")
@@ -584,32 +882,30 @@ async function createWidget(size) {
         }
         customLandkreisName = params[2]
     }
-
     const isLocationFlexible = !params
-    const vaccinationImage = await Cache.loadVaccinationImage()
+    UiHelpers.setVaccinationImage(await Cache.loadVaccinationImage())
 
-    if (isMediumSizedWidget) {
+    if (APP_STATE.isMediumSize) {
 
         if (widgetMode === WIDGET_MODE.INFECTIONS) {
-            const infectionData = await loadAbsoluteCases()
-            createInfectionsWidget(widget, infectionData, vaccinationImage)
+            const infectionData = await DataService.loadAbsoluteCases()
+            createInfectionsWidget(widget, infectionData)
             if (infectionData) {
                 widget.refreshAfterDate = Utils.getNextUpdate(infectionData)
             }
             return widget
         }
-        const data = await loadData(location, isLocationFlexible)
-        CONFIG.isInfectionsWidgetCentered = false
+        const data = await DataService.loadData(location, isLocationFlexible)
         const main = widget.addStack()
         const l = main.addStack()
         l.layoutVertically()
-        createIncidenceWidget(l, data, customLandkreisName, isLocationFlexible, location.isCached, isMediumSizedWidget, vaccinationImage)
+        createIncidenceWidget(l, data, customLandkreisName, isLocationFlexible, location.isCached)
         main.addSpacer()
         main.addSpacer(40)
         main.addSpacer()
         const r = main.addStack()
         r.layoutVertically()
-        createInfectionsWidget(r, data, vaccinationImage)
+        createInfectionsWidget(r, data)
 
         if (data) {
             widget.refreshAfterDate = Utils.getNextUpdate(data)
@@ -619,15 +915,15 @@ async function createWidget(size) {
 
     switch (widgetMode) {
         case WIDGET_MODE.INCIDENCE:
-            const data = await loadData(location, isLocationFlexible)
-            createIncidenceWidget(widget, data, customLandkreisName, isLocationFlexible, location.isCached, isMediumSizedWidget, vaccinationImage)
+            const data = await DataService.loadData(location, isLocationFlexible)
+            createIncidenceWidget(widget, data, customLandkreisName, isLocationFlexible, location.isCached)
             if (data) {
                 widget.refreshAfterDate = Utils.getNextUpdate(data)
             }
             break;
         case WIDGET_MODE.INFECTIONS:
-            const infectionData = await loadAbsoluteCases()
-            createInfectionsWidget(widget, infectionData, vaccinationImage)
+            const infectionData = await DataService.loadAbsoluteCases()
+            createInfectionsWidget(widget, infectionData)
             if (infectionData) {
                 widget.refreshAfterDate = Utils.getNextUpdate(infectionData)
             }

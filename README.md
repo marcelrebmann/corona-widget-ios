@@ -10,16 +10,14 @@ Zur Nutzung des Widgets wird die kostenlose iOS-App [Scriptable](https://scripta
 
 <br/>
 
-# Screenshots
+## **Inzidenz-Modus (Landkreis/Kreisstadt):**  
+![Inzidenz](./screenshots/banner_incidence.png)
 
-### **Inzidenz-Modus (Landkreis/Kreisstadt):**  
-![Inzidenz](./screenshots/incidence-mode.jpeg)
+## **Neuinfektionen-Modus (Deutschland):**  
+![Neuinfektionen](./screenshots/banner_infection.png)
 
-### **Neuinfektionen-Modus (Deutschland):**  
-![Neuinfektionen](./screenshots/infections-mode.jpeg)
-
-### **Kombinierter Modus (Medium):**  
-![Inzidenz](./screenshots/medium.jpg)
+## **Kombinierter Modus (Medium):**  
+![Inzidenz](./screenshots/banner_medium.png)
 
 <br/>
 
@@ -32,6 +30,8 @@ Zur Nutzung des Widgets wird die kostenlose iOS-App [Scriptable](https://scripta
 * Kennzeichnung Kreisfreier Städte (SK)
 * Der Landkreis-Name kann durch ein eigenes Label überschrieben werden
 * Impfquote für Bundesland und Anstieg der Impfungen im Vergleich zum Vortag
+* R-Wert für Bundesland (7-Tage-Schätzwert)
+* Auto Light-/Darkmode
 
 <br/>
 
@@ -40,6 +40,8 @@ Zur Nutzung des Widgets wird die kostenlose iOS-App [Scriptable](https://scripta
 * Veränderung der gestrigen Neuinfektionen im Vergleich zum Vortag ("Gestern waren es X Neuinfektionen mehr, als vorgestern")
 * 7-Tage-Inzidenz für Deutschland + Trend
 * Impfquoten für Deutschland und Anstieg der Impfungen im Vergleich zum Vortag
+* R-Wert für Deutschland (7-Tage-Schätzwert)
+* Auto Light-/Darkmode
 
 <br/>
 
@@ -52,6 +54,9 @@ Die Aktualität der bereitgestellten Daten kann aufgrund von Meldeverzögerungen
 
 * Daten zu Impfquoten:  
   https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Daten/Impfquoten-Tab.html
+
+* Daten zum R-Wert:  
+  https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Projekte_RKI/Nowcasting.html
 
 Diese Daten werden über ein von mir betriebenes Backend aufbereitet und für das Widget zur Verfügung gestellt.
 
@@ -77,11 +82,11 @@ Die WidgetParameter sind wie folgt aufgebaut:
 
 ### **Beispielkonfigurationen:**  
 
-| Beispiele | Konfiguration |
-| --------  | ---- |
-| Variabler Ort (via Standort/GPS) | - |
+| Beispiele | Konfiguration | Hinweise |
+| --------  | ---- | --- |
+| Variabler Ort (via Standort/GPS) | - | Erfordert Standortzugriff |
 | Fixer Ort | `49.88,12.68` |
-| Fixer Ort mit selbstgewählter Ortsbezeichnung ("Arbeit") | `49.88,12.68,Arbeit` |
+| Fixer Ort mit eigener Ortsbezeichnung ("Arbeit") | `49.88,12.68,Arbeit` |
 | Neuinfektionen-Modus | `INF` |
 
 <br/>
@@ -93,9 +98,9 @@ Die WidgetParameter sind wie folgt aufgebaut:
 | Farbe | Inzidenz |
 | --- | --- |
 | GRÜN | < 35 |  
-| GELB | > 35 |
-| ROT | > 50 |
-| MAGENTA | > 200 |
+| GELB | >= 35 |
+| ROT | >= 50 |
+| MAGENTA | >= 200 |
 
 <br/>
 
@@ -106,37 +111,32 @@ Die WidgetParameter sind wie folgt aufgebaut:
 | ▼ | GRÜN | Fallende Inzidenz |  
 | ▶︎ | GRAU | Gleichbleibende Inzidenz |
 | ▲ | ORANGE | Leicht ansteigende Inzidenz |
-| ▲ | ROT | Stark ansteigende Inzident |
+| ▲ | ROT | Stark ansteigende Inzidenz |
 
 <br/>
 
+# Hinweise zu Störungen
+
+Bei technischen Problemen des RKI können möglicherweise keine/veraltete Daten im Widget angezeigt werden.
+
+**Wichtig:**  
+Die Konfiguration mit variablem Ort (per GPS) setzt einen regelmäßigen Abgleich mit der RKI-Schnittstelle voraus, um den Landkreis zu ermitteln, in dem man sich gerade befindet.  
+Falls die RKI-Schnittstelle zeitweise nicht verfügbar oder überlastet ist, werden keine Daten angezeigt.
+
+Die Konfigurationen mit fixem Ort sowie der Neuinfektionen-Modus werden bei einer technischen Störung in der Regel ältere Daten angezeigt (erkennbar am Zeitstempel im Widget).
+
 # Changelog
 
-#### **Update 11.01.2021**
-Impfquoten für Bundesländer und Deutschland werden angezeigt (Datenquelle: RKI).
-- Prozentuale Anzeige der Impfungen im jeweiligen Bundesland bzw. in Deutschland (INF-Modus)
-- Zunahme im Vergleich zum Vortag
-- Indikator (Ausrufezeichen mit Pfeil) zur Info, falls nur "veraltete" Impfdaten zur Verfügung stehen (Die Daten werden vom RKI nur werktags aktualisiert).
+## Version 1.1.0
+- Neues Design
+- R-Wert (7-Tage-Schätzwert) für Bundesland und Deutschland + Trend
+- Balkendiagramme für Inzidenzverläufe
+- Fortschrittsbalken-Grafik für Impfquoten
 
-#### **Update 28.12.2020**
-Behebt ein Problem, bei dem gelegentlich (oftmals morgens) keine Daten angezeigt wurden - vermutlich aufgrund starker Auslastung der RKI API.
-
-- Caching der zuletzt abgefragten Daten lokal auf dem Gerät. Falls keine Daten geladen werden können, werden diese angezeigt.
-- Verbesserung der Effizienz durch weniger Aktualisierungen im Hintergrund.
-
-#### **Update 08.12.2020**
-- Neue Farbe (dunkles Magenta) bei Inzidenzen über dem 200er Grenzwert.
-- Die Medium-Größe des Scriptable Widgets wird nun auch unterstützt.
-
-#### **Update 07.11.2020**
- - Das Infektionen (INF) Widget kann wahlweise zentriert oder linksbündig angezeigt werden.
-  Einstellbar über die Konfigurations-Variable `CONFIG.isInfectionsWidgetCentered`
-- Die Hintergrundfarbe im Dark Mode ist jetzt nicht mehr komplett schwarz, sondern gleicht der anderer Apple-Widgets (beispielsweise dem Kalender-Widget)
-- Stadtkreise werden nun mit `(SK)` annotiert, um mehr Platz zu schaffen.
-
-#### **Update 24.10.2020 - Trends sind jetzt verfügbar!**
-Die Trends basieren auf dem Verlauf der jeweiligen Inzidenzwerte der letzten 7 Tage für den ausgewählten Stand-/Landkreis/Bundesland/Deutschland
-**Symbollegende:**
-- ▲ = steigend (Farben: ROT = starker Anstieg, ORANGE = moderater Anstieg)
-- ▶︎ = gleichbleibend (Farbe: GRAU)
-- ▼ = fallend (Farbe: GRÜN)
+## Version 1.0.0
+- Inzidenzen + Trends
+- Neuinfektionen Kreis + DE
+- Impfquote Bundesland + DE
+- Kombinierter Modus (Medium-Größe)
+- Farbige Grenzwerte: < 35, 35, 50, 200
+- Lokales Datencaching
