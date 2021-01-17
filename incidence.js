@@ -51,7 +51,6 @@ const COLOR_DARK_TRANSPARENT_BG = new Color("#1c1c1d", 0.04)
 const COLOR_CONTAINER_BG = Color.dynamic(COLOR_DARK_TRANSPARENT_BG, COLOR_LIGHT_TRANSPARENT_BG)
 const COLOR_CHART_TREND = Color.dynamic(new Color("#000", 0.4), new Color("#fff", 0.6))
 
-
 const BUNDESLAENDER_SHORT = {
     'Baden-Württemberg': 'BW',
     'Bayern': 'BY',
@@ -70,6 +69,9 @@ const BUNDESLAENDER_SHORT = {
     'Schleswig-Holstein': 'SH',
     'Thüringen': 'TH'
 }
+
+const LOCALE_DE = "de_DE"
+const COMMA_SEPARATOR = Device.locale() === LOCALE_DE ? "," : "."
 
 /**
  * App specific state.
@@ -206,9 +208,9 @@ class Utils {
         if (number < 10000) {
             return `${number.toLocaleString()}`
         } else if (number < 1000000) {
-            return `${number % 1000 >= 100 ? (number / 1000).toFixed(1) : Math.floor(number / 1000)}k`.replace(".", ",")
+            return `${number % 1000 >= 100 ? (number / 1000).toFixed(1) : Math.floor(number / 1000)}k`.replace(".", COMMA_SEPARATOR)
         } else {
-            return `${number % 1000000 >= 100000 ? (number / 1000000).toFixed(1) : Math.floor(number / 1000000)}M`.replace(".", ",")
+            return `${number % 1000000 >= 100000 ? (number / 1000000).toFixed(1) : Math.floor(number / 1000000)}M`.replace(".", COMMA_SEPARATOR)
         }
     }
 
@@ -377,7 +379,7 @@ class UiHelpers {
         rValueTrendIconLabel.font = Font.systemFont(fontSize - 2)
         rValueTrendIconLabel.textColor = UiHelpers.getTrendColor(rValuePredictedSlope, 0.1)
 
-        const rValueLabel = row.addText(`${Utils.isNumericValue(rValue) ? `${rValue.toFixed(2).replace(".", ",")}` : "-"}`)
+        const rValueLabel = row.addText(`${Utils.isNumericValue(rValue) ? `${rValue.toFixed(2).replace(".", COMMA_SEPARATOR)}` : "-"}`)
         rValueLabel.font = Font.boldSystemFont(fontSize)
         rValueLabel.textColor = COLOR_GREY
     }
@@ -404,7 +406,7 @@ class UiHelpers {
         trendIconLabel.font = Font.systemFont(fontSize - 2)
         trendIconLabel.textColor = UiHelpers.getTrendColor(predictedIncidenceSlope)
 
-        const incidenceLabel = row.addText(Utils.isNumericValue(incidence) ? `${incidence.toFixed(1).replace(".", ",")}` : "-")
+        const incidenceLabel = row.addText(Utils.isNumericValue(incidence) ? `${incidence.toFixed(1).replace(".", COMMA_SEPARATOR)}` : "-")
         incidenceLabel.font = Font.boldSystemFont(fontSize)
         incidenceLabel.textColor = UiHelpers.getIncidenceColor(incidence)
     }
@@ -434,7 +436,7 @@ class UiHelpers {
             vaccIcon.imageSize = new Size(10, 10)
         }
 
-        const vaccPercent = row1.addText(`${vaccImage ? " " : ""}${Utils.isNumericValue(vaccinationQuote) ? `${vaccinationQuote.toFixed(vaccinationQuote >= 10 ? 1 : 2).replace(".", ",")}` : "-"}%`)
+        const vaccPercent = row1.addText(`${vaccImage ? " " : ""}${Utils.isNumericValue(vaccinationQuote) ? `${vaccinationQuote.toFixed(vaccinationQuote >= 10 ? 1 : 2).replace(".", COMMA_SEPARATOR)}` : "-"}%`)
         vaccPercent.font = Font.boldSystemFont(11)
         vaccPercent.textColor = COLOR_BLUE
 
@@ -715,7 +717,7 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
 
     const isLandkreisIncidenceToBeShortened = Utils.isNumericValue(data.landkreis.cases7_per_100k) && data.landkreis.cases7_per_100k >= 1000;
     const landkreisIncidence = data.landkreis.cases7_per_100k.toFixed(isLandkreisIncidenceToBeShortened ? 0 : 1)
-    const incidenceLabel = incidenceRow.addText(Utils.isNumericValue(data.landkreis.cases7_per_100k) ? `${landkreisIncidence.replace(".", ",")}` : "-")
+    const incidenceLabel = incidenceRow.addText(Utils.isNumericValue(data.landkreis.cases7_per_100k) ? `${landkreisIncidence.replace(".", COMMA_SEPARATOR)}` : "-")
     incidenceLabel.font = Font.boldSystemFont(24)
     incidenceLabel.minimumScaleFactor = 0.8
     incidenceLabel.textColor = UiHelpers.getIncidenceColor(data.landkreis.cases7_per_100k)
