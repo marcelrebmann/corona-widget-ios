@@ -719,13 +719,12 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
     const landkreisIncidence = data.landkreis.cases7_per_100k.toFixed(isLandkreisIncidenceToBeShortened ? 0 : 1)
     const incidenceLabel = incidenceRow.addText(Utils.isNumericValue(data.landkreis.cases7_per_100k) ? `${landkreisIncidence.replace(".", COMMA_SEPARATOR)}` : "-")
     incidenceLabel.font = Font.boldSystemFont(24)
-    incidenceLabel.minimumScaleFactor = 0.8
+    incidenceLabel.minimumScaleFactor = 0.7
     incidenceLabel.textColor = UiHelpers.getIncidenceColor(data.landkreis.cases7_per_100k)
 
     const landkreisTrendIconLabel = incidenceRow.addText(` ${UiHelpers.getInfectionTrend(data.landkreis.cases7_per_100k_trend.slope)}`)
     landkreisTrendIconLabel.font = Font.systemFont(14)
     landkreisTrendIconLabel.textColor = UiHelpers.getTrendColor(data.landkreis.cases7_per_100k_trend.slope)
-
 
     incidenceRow.addSpacer()
 
@@ -733,7 +732,7 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
     chartStack.layoutVertically()
     UiHelpers.drawBarChart(chartStack, data.landkreis.cases7_per_100k_history, 12, 36)
 
-    incidenceRow.addSpacer(APP_STATE.isMediumSize ? null : 4)
+    incidenceRow.addSpacer(2)
     const casesLandkreisIncrease = Utils.isNumericValue(data.landkreis.cases) && Utils.isNumericValue(data.landkreis.cases_previous_day) ? data.landkreis.cases - data.landkreis.cases_previous_day : undefined
     const casesLandkreisLabel = chartStack.addText(`${Utils.isNumericValue(casesLandkreisIncrease) ? `+${Math.max(casesLandkreisIncrease, 0).toLocaleString()}` : "-"}`)
     casesLandkreisLabel.font = Font.boldSystemFont(9)

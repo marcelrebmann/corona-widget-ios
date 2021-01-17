@@ -125,6 +125,9 @@ Falls die RKI-Schnittstelle zeitweise nicht verfügbar oder überlastet ist, wer
 
 Die Konfigurationen mit fixem Ort sowie der Neuinfektionen-Modus werden bei einer technischen Störung in der Regel ältere Daten angezeigt (erkennbar am Zeitstempel im Widget).
 
+# Contributing
+Bei Verbesserungsvorschlägen/Bugs/etc gerne einen PR stellen oder ein Issue öffnen!
+
 # Changelog
 
 ## Version 1.1.0
