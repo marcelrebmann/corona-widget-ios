@@ -7,7 +7,7 @@
  * Author: https://github.com/marcelrebmann/
  * Source: https://github.com/marcelrebmann/corona-widget-ios
  * 
- * Version: 1.1.0
+ * Version: 1.1.1
  */
 
 const locationApi = (location) => `https://services7.arcgis.com/mOBPykOjAyBO2ZKk/arcgis/rest/services/RKI_Landkreisdaten/FeatureServer/0/query?where=1%3D1&outFields=OBJECTID,cases7_per_100k,cases7_bl_per_100k,cases,GEN,county,BL,last_update&geometry=${location.longitude.toFixed(3)}%2C${location.latitude.toFixed(3)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelWithin&returnGeometry=false&outSR=4326&f=json`
@@ -77,7 +77,8 @@ const BUNDESLAENDER_SHORT = {
  */
 const APP_STATE = {
     widgetSize: "small",
-    isMediumSize: false
+    isMediumSize: false,
+    widgetMode: undefined
 }
 
 class Cache {
@@ -231,23 +232,30 @@ class Utils {
             || !data.country.r_value_7_days_last_updated) {
             return null
         }
+        const relevantTimestamps = [];
+
         const last_updated = new Date(data.rki_updated)
         last_updated.setDate(last_updated.getDate() + 1)
         last_updated.setHours(0)
+        relevantTimestamps.push(last_updated.getTime())
 
         const vaccination_last_updated = new Date(data.vaccination.last_updated)
         vaccination_last_updated.setDate(vaccination_last_updated.getDate() + 1)
         vaccination_last_updated.setHours(0)
         vaccination_last_updated.setMinutes(0)
         vaccination_last_updated.setSeconds(0)
+        relevantTimestamps.push(vaccination_last_updated.getTime())
 
-        const rValueLastUpdated = new Date(data.r_value_7_days_last_updated)
-        rValueLastUpdated.setDate(rValueLastUpdated.getDate() + 1)
-        rValueLastUpdated.setHours(0)
-        rValueLastUpdated.setMinutes(0)
-        rValueLastUpdated.setSeconds(0)
+        if (APP_STATE.isMediumSize || APP_STATE.widgetMode === WIDGET_MODE.INFECTIONS) {
+            const rValueLastUpdated = new Date(data.r_value_7_days_last_updated)
+            rValueLastUpdated.setDate(rValueLastUpdated.getDate() + 1)
+            rValueLastUpdated.setHours(0)
+            rValueLastUpdated.setMinutes(0)
+            rValueLastUpdated.setSeconds(0)
+            relevantTimestamps.push(rValueLastUpdated.getTime())
+        }
 
-        const moreRecent = Math.min(last_updated.getTime(), vaccination_last_updated.getTime(), rValueLastUpdated.getTime())
+        const moreRecent = Math.min(...relevantTimestamps)
         return moreRecent > Date.now() ? new Date(moreRecent) : null
     }
 }
@@ -725,7 +733,7 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
 
     incidenceRow.addSpacer(APP_STATE.isMediumSize ? null : 4)
     const casesLandkreisIncrease = Utils.isNumericValue(data.landkreis.cases) && Utils.isNumericValue(data.landkreis.cases_previous_day) ? data.landkreis.cases - data.landkreis.cases_previous_day : undefined
-    const casesLandkreisLabel = chartStack.addText(`${Utils.isNumericValue(casesLandkreisIncrease) ? `${casesLandkreisIncrease >= 0 ? "+" : ""}${casesLandkreisIncrease.toLocaleString()}` : "-"}`)
+    const casesLandkreisLabel = chartStack.addText(`${Utils.isNumericValue(casesLandkreisIncrease) ? `+${Math.max(casesLandkreisIncrease, 0).toLocaleString()}` : "-"}`)
     casesLandkreisLabel.font = Font.boldSystemFont(9)
     casesLandkreisLabel.textColor = COLOR_GREY
 
@@ -738,10 +746,6 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
     const footer = widget.addStack()
     footer.useDefaultPadding()
     footer.centerAlignContent()
-
-    if (APP_STATE.isMediumSize) {
-        footer.addSpacer(8)
-    }
 
     const footerLeft = footer.addStack()
     footerLeft.layoutVertically()
@@ -766,10 +770,6 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
         "v",
         true
     )
-
-    if (APP_STATE.isMediumSize) {
-        footer.addSpacer()
-    }
 }
 
 const createInfectionsWidget = (widget, data) => {
@@ -843,7 +843,7 @@ const createInfectionsWidget = (widget, data) => {
 let widget = await createWidget(config.widgetFamily)
 
 if (!config.runsInWidget) {
-    await widget.presentSmall()
+    await widget.presentMedium()
 }
 Script.setWidget(widget)
 Script.complete()
@@ -851,9 +851,10 @@ Script.complete()
 async function createWidget(size) {
     APP_STATE.isMediumSize = size === WIDGET_SIZE_MEDIUM
     APP_STATE.widgetSize = size
+    APP_STATE.widgetMode = WIDGET_MODE.INCIDENCE;
+
     let location = {};
     let customLandkreisName;
-    let widgetMode = WIDGET_MODE.INCIDENCE;
 
     const params = args.widgetParameter ? args.widgetParameter.split(",") : undefined
     // const params = ["49.89", "10.855"] // BA
@@ -872,7 +873,7 @@ async function createWidget(size) {
     }
 
     if (params && params[0] === "INF") {
-        widgetMode = WIDGET_MODE.INFECTIONS
+        APP_STATE.widgetMode = WIDGET_MODE.INFECTIONS
     }
 
     if (params && params[0] !== "INF") {
@@ -887,7 +888,7 @@ async function createWidget(size) {
 
     if (APP_STATE.isMediumSize) {
 
-        if (widgetMode === WIDGET_MODE.INFECTIONS) {
+        if (APP_STATE.widgetMode === WIDGET_MODE.INFECTIONS) {
             const infectionData = await DataService.loadAbsoluteCases()
             createInfectionsWidget(widget, infectionData)
             if (infectionData) {
@@ -901,7 +902,7 @@ async function createWidget(size) {
         l.layoutVertically()
         createIncidenceWidget(l, data, customLandkreisName, isLocationFlexible, location.isCached)
         main.addSpacer()
-        main.addSpacer(40)
+        main.addSpacer(34)
         main.addSpacer()
         const r = main.addStack()
         r.layoutVertically()
@@ -913,7 +914,7 @@ async function createWidget(size) {
         return widget
     }
 
-    switch (widgetMode) {
+    switch (APP_STATE.widgetMode) {
         case WIDGET_MODE.INCIDENCE:
             const data = await DataService.loadData(location, isLocationFlexible)
             createIncidenceWidget(widget, data, customLandkreisName, isLocationFlexible, location.isCached)
