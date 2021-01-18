@@ -696,7 +696,7 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
 
     if (!data) {
         widget.addSpacer()
-        widget.addText("Keine Ergebnisse für den aktuellen Ort gefunden.")
+        widget.addText("Aktueller Ort konnte nicht ermittelt werden.")
         return;
     }
     const stateInfo = widget.addText(UiHelpers.generateDataState(data))
@@ -892,26 +892,25 @@ async function createWidget(size) {
         if (APP_STATE.widgetMode === WIDGET_MODE.INFECTIONS) {
             const infectionData = await DataService.loadAbsoluteCases()
             createInfectionsWidget(widget, infectionData)
-            if (infectionData) {
-                widget.refreshAfterDate = Utils.getNextUpdate(infectionData)
-            }
+            widget.refreshAfterDate = Utils.getNextUpdate(infectionData)
             return widget
         }
-        const data = await DataService.loadData(location, isLocationFlexible)
+        let data = await DataService.loadData(location, isLocationFlexible)
         const main = widget.addStack()
-        const l = main.addStack()
-        l.layoutVertically()
-        createIncidenceWidget(l, data, customLandkreisName, isLocationFlexible, location.isCached)
+        const leftSide = main.addStack()
+        leftSide.layoutVertically()
+        createIncidenceWidget(leftSide, data, customLandkreisName, isLocationFlexible, location.isCached)
         main.addSpacer()
         main.addSpacer(34)
         main.addSpacer()
-        const r = main.addStack()
-        r.layoutVertically()
-        createInfectionsWidget(r, data)
+        const rightSide = main.addStack()
+        rightSide.layoutVertically()
 
-        if (data) {
-            widget.refreshAfterDate = Utils.getNextUpdate(data)
+        if (!data) {
+            data = await DataService.loadAbsoluteCases()
         }
+        createInfectionsWidget(rightSide, data)
+        widget.refreshAfterDate = Utils.getNextUpdate(data)
         return widget
     }
 
@@ -919,16 +918,12 @@ async function createWidget(size) {
         case WIDGET_MODE.INCIDENCE:
             const data = await DataService.loadData(location, isLocationFlexible)
             createIncidenceWidget(widget, data, customLandkreisName, isLocationFlexible, location.isCached)
-            if (data) {
-                widget.refreshAfterDate = Utils.getNextUpdate(data)
-            }
+            widget.refreshAfterDate = Utils.getNextUpdate(data)
             break;
         case WIDGET_MODE.INFECTIONS:
             const infectionData = await DataService.loadAbsoluteCases()
             createInfectionsWidget(widget, infectionData)
-            if (infectionData) {
-                widget.refreshAfterDate = Utils.getNextUpdate(infectionData)
-            }
+            widget.refreshAfterDate = Utils.getNextUpdate(infectionData)
             break;
         default:
             widget.addText("Keine Daten.")

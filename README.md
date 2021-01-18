@@ -72,9 +72,11 @@ Diese Daten werden über ein von mir betriebenes Backend aufbereitet und für da
 # Konfiguration
 Die Konfiguration findet mittels des WidgetParameters statt.
 
-![Konfiguration](./screenshots/configuration.jpeg))
+![Konfiguration](./screenshots/configuration.jpeg)
 
-Der Ort wird mittels Längen- und Breitengrad konfiguriert.
+Der Ort wird mittels Längen- und Breitengrad konfiguriert.  
+Tipp: In der Google Maps App einfach einen Standort-Pin mit dem Finger setzen und dann die Kooordinaten kopieren.
+Beim Einfügen in die Parameter müssen dann nur noch die Klammern entfernt werden.  
 Falls gewünscht, kann als dritter Parameter noch eine eigene Bezeichnung für den Landkreis angegeben werden.
 
 Die WidgetParameter sind wie folgt aufgebaut:  
@@ -129,6 +131,11 @@ Die Konfigurationen mit fixem Ort sowie der Neuinfektionen-Modus werden bei eine
 Bei Verbesserungsvorschlägen/Bugs/etc gerne einen PR stellen oder ein Issue öffnen!
 
 # Changelog
+
+## Version 1.1.1
+- Behebt ein Problem im kombinierten Modus, bei dem Inzidenzen nicht vollständig angezeigt wurden
+- Verbessert die Abfrage-Effizienz des Inzidenz-Modus Widgets
+- Konsistente Formatierung von Kommazahlen abhängig von der Lokalisierung des Geräts
 
 ## Version 1.1.0
 - Neues Design
