@@ -667,9 +667,9 @@ class DataService {
                 isCached: true
             }
         }
-        const hasLocationChanged = (location.latitude !== lastKnownLocation.latitude || location.longitude !== lastKnownLocation.longitude);
+        const hasLocationChanged = !lastKnownLocation || (location.latitude !== lastKnownLocation.latitude || location.longitude !== lastKnownLocation.longitude);
 
-        if (!lastKnownLocation || hasLocationChanged) {
+        if (hasLocationChanged) {
             Cache.updateLocation(location)
         }
         return location
