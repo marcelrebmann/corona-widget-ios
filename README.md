@@ -132,6 +132,9 @@ Bei Verbesserungsvorschlägen/Bugs/etc gerne einen PR stellen oder ein Issue öf
 
 # Changelog
 
+## Version 1.1.2
+- Behebt ein Problem, bei dem die Standortermittlung bei einer frischen Installation fehlschlagen konnte
+
 ## Version 1.1.1
 - Behebt ein Problem im kombinierten Modus, bei dem Inzidenzen nicht vollständig angezeigt wurden
 - Verbessert die Abfrage-Effizienz des Inzidenz-Modus Widgets
