@@ -3,23 +3,28 @@
 // icon-color: deep-gray; icon-glyph: magic;
 /**
  * Licence: Robert Koch-Institut (RKI), dl-de/by-2-0
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * 
  * Author: https://github.com/marcelrebmann/
  * Source: https://github.com/marcelrebmann/corona-widget-ios
  * 
- * Version: 1.1.2
+ * Version: 1.2.0
  */
 
-const locationApi = (location) => `https://services7.arcgis.com/mOBPykOjAyBO2ZKk/arcgis/rest/services/RKI_Landkreisdaten/FeatureServer/0/query?where=1%3D1&outFields=OBJECTID,cases7_per_100k,cases7_bl_per_100k,cases,GEN,county,BL,last_update&geometry=${location.longitude.toFixed(3)}%2C${location.latitude.toFixed(3)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelWithin&returnGeometry=false&outSR=4326&f=json`
-const serverApi = (landkreisId) => `https://cdn.marcelrebmann.de/corona/?id=${landkreisId}`
-const VACCINATION_IMG_URL = `https://cdn.marcelrebmann.de/img/vaccine-64.png`
-
 const CONFIG = {
-    showTrendCurves: false,
-    location_cache_filename: "corona_location.txt",
-    data_cache_filename: "corona_widget_data.txt",
-    vaccination_image_filename: "vaccine-64.png"
+    serverUrl: "https://cdn.marcelrebmann.de/corona", // If self-hosted server is used, enter your server url here.
+    location_cache_filename: "corona_location.txt", // Do not change
+    data_cache_filename: "corona_widget_data.txt", // Do not change
+    vaccination_image_filename: "vaccine-64.png", // Do not change
+    showTrendCurves: false, // Show trend curves inside the bar charts. Experimental feature.
+    showIncidenceStability: true, // Show stability estimation. If false, todays absolute new cases are displayed.
+    debugMode: false // Log debug statements to console.
 }
+
+
+const locationApi = (location) => `https://services7.arcgis.com/mOBPykOjAyBO2ZKk/arcgis/rest/services/RKI_Landkreisdaten/FeatureServer/0/query?where=1%3D1&outFields=OBJECTID,cases7_per_100k,cases7_bl_per_100k,cases,GEN,county,BL,last_update&geometry=${location.longitude.toFixed(3)}%2C${location.latitude.toFixed(3)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelWithin&returnGeometry=false&outSR=4326&f=json`
+const serverApi = (landkreisId) => `${CONFIG.serverUrl}?id=${landkreisId}`
+const VACCINATION_IMG_URL = `${CONFIG.serverUrl}/images/${CONFIG.vaccination_image_filename}`
 
 const WIDGET_MODE = {
     INCIDENCE: "INCIDENCE",
@@ -31,11 +36,18 @@ const WIDGET_SIZE_MEDIUM = "medium"
 
 const INCIDENCE_YELLOW = 35
 const INCIDENCE_RED = 50
-const INCIDENCE_MAGENTA = 200
+const INCIDENCE_MAGENTA = 100
+const INCIDENCE_PINK = 200
+
+const INCIDENCE_STABILITY_LEVEL_NONE = "-";
+const INCIDENCE_STABILITY_LEVEL_1 = "<50";
+const INCIDENCE_STABILITY_LEVEL_2 = "<100";
+const INCIDENCE_STABILITY_LEVEL_3 = ">100";
 
 const COLOR_CYAN = new Color("#21b1f3")
 const COLOR_BLUE = Color.dynamic(Color.blue(), COLOR_CYAN)
 const COLOR_MAGENTA = new Color("#db0080")
+const COLOR_PINK = new Color("#ff05b4")
 const COLOR_RED = Color.red()
 const COLOR_ORANGE = Color.orange()
 const COLOR_GREEN = Color.green()
@@ -81,6 +93,16 @@ const APP_STATE = {
     widgetSize: "small",
     isMediumSize: false,
     widgetMode: undefined
+}
+
+class Logger {
+
+    static log(...args) {
+
+        if (CONFIG.debugMode) {
+            console.log(...args);
+        }
+    }
 }
 
 class Cache {
@@ -262,6 +284,118 @@ class Utils {
     }
 }
 
+class IncidenceStabilityLevel {
+
+    constructor(incidenceHistory) {
+        this._incidenceHistory = incidenceHistory || [];
+        this._maxIncidence = Math.max(...this._incidenceHistory.filter(inc => !isNaN(inc) && isFinite(inc)), 0);
+        this._stabilityLevel = IncidenceStabilityLevel.calculateIncidenceStabilityLevel(this._incidenceHistory);
+        this._color = IncidenceStabilityLevel.getIncidenceStabilityColor(this._stabilityLevel);
+        this._sfSymbolName = IncidenceStabilityLevel.getSymbolName(this._stabilityLevel)
+    }
+
+    static getIncidenceStabilityColor(stabilityLevel) {
+        switch (stabilityLevel) {
+            case INCIDENCE_STABILITY_LEVEL_1:
+                return COLOR_GREEN
+            case INCIDENCE_STABILITY_LEVEL_2:
+                return COLOR_ORANGE
+            case INCIDENCE_STABILITY_LEVEL_3:
+                return COLOR_RED
+            default:
+                return COLOR_GREY
+        }
+    }
+
+    static getStabilityLevelForIncidence(incidence) {
+        if (incidence < 50) {
+            return INCIDENCE_STABILITY_LEVEL_1
+        } else if (incidence < 100) {
+            return INCIDENCE_STABILITY_LEVEL_2
+        } else if (incidence >= 100) {
+            return INCIDENCE_STABILITY_LEVEL_3
+        } else {
+            return INCIDENCE_STABILITY_LEVEL_NONE
+        }
+    }
+
+    static calculateIncidenceStabilityLevel(incidenceHistory) {
+        if (!incidenceHistory || incidenceHistory.length < 3) {
+            return INCIDENCE_STABILITY_LEVEL_NONE
+        }
+
+        // Go through history until three equal levels found
+        const lvls = incidenceHistory.map(incidence => {
+            if (incidence < 0) {
+                return INCIDENCE_STABILITY_LEVEL_NONE
+            } else if (incidence < 50) {
+                return INCIDENCE_STABILITY_LEVEL_1
+            } else if (incidence < 100) {
+                return INCIDENCE_STABILITY_LEVEL_2
+            } else if (incidence >= 100) {
+                return INCIDENCE_STABILITY_LEVEL_3
+            } else {
+                return INCIDENCE_STABILITY_LEVEL_NONE
+            }
+        });
+        Logger.log("LEVELS: ", lvls);
+
+        let currentStableLevel = INCIDENCE_STABILITY_LEVEL_NONE;
+        let levelCandidate;
+        let counter = 0;
+
+        for (let i = 0; i < lvls.length; i++) {
+            const lvl = lvls[i];
+            Logger.log(lvl);
+
+            if (lvl === INCIDENCE_STABILITY_LEVEL_NONE) {
+                continue;
+            }
+
+            if (!levelCandidate || lvl !== levelCandidate) {
+                levelCandidate = lvl;
+                counter = 1;
+                continue;
+            }
+            counter++;
+
+            if (counter === 3) {
+                currentStableLevel = lvl;
+                levelCandidate = undefined;
+                counter = 0;
+                Logger.log("NEW STABLE LEVEL: " + currentStableLevel);
+            }
+        }
+
+        Logger.log("STABLE LEVEL FOUND: " + currentStableLevel);
+        return currentStableLevel;
+    }
+
+    static getSymbolName(stabilityLevel) {
+
+        switch (stabilityLevel) {
+            case INCIDENCE_STABILITY_LEVEL_1:
+            case INCIDENCE_STABILITY_LEVEL_2:
+            case INCIDENCE_STABILITY_LEVEL_3:
+                return "lock.circle.fill"
+            default:
+                return "lock.circle.fill"
+        }
+    }
+
+    get color() {
+        return this._color;
+    }
+
+    get stabilityLevel() {
+        return this._stabilityLevel;
+    }
+
+    get sfSymbolName() {
+        return this._sfSymbolName;
+    }
+}
+
 /**
  * Helper class for UI-related operations.
  * Contains functions to get or construct UI elements.
@@ -281,7 +415,9 @@ class UiHelpers {
      * @param {*} incidence The incidence value.
      */
     static getIncidenceColor(incidence) {
-        if (incidence >= INCIDENCE_MAGENTA) {
+        if (incidence >= INCIDENCE_PINK) {
+            return COLOR_PINK;
+        } else if (incidence >= INCIDENCE_MAGENTA) {
             return COLOR_MAGENTA
         } else if (incidence >= INCIDENCE_RED) {
             return COLOR_RED
@@ -299,9 +435,9 @@ class UiHelpers {
     static getInfectionTrend(slope) {
         if (slope >= 1) {
             return "▲"
-        } else if (slope >= 0) {
+        } else if (slope > -1) {
             return "▶︎"
-        } else if (slope < 0) {
+        } else if (slope <= -1) {
             return "▼"
         } else {
             return "-"
@@ -320,7 +456,7 @@ class UiHelpers {
             return COLOR_RED
         } else if (slope >= (1 * factor)) {
             return COLOR_ORANGE
-        } else if (slope < 0) {
+        } else if (slope <= (-1 * factor)) {
             return COLOR_GREEN
         } else {
             return COLOR_GREY
@@ -392,23 +528,48 @@ class UiHelpers {
      * @param {*} label Text to render in front of the incidence value.
      * @param {*} fontSize The font size of the row elements.
      */
-    static indicenceRow(root, incidence, indicenceTrend, label, fontSize = 11) {
-        const predictedIncidenceSlope = indicenceTrend ? indicenceTrend.slope : indicenceTrend
-
+    static indicenceRow(root, incidence, indicenceTrend, label, fontSize = 11, showTrend = true, renderLabelAsSymbol = false) {
         const row = root.addStack()
         row.centerAlignContent()
 
-        const labelText = row.addText(`${label}`)
-        labelText.font = Font.boldSystemFont(fontSize)
-        labelText.textColor = COLOR_GREY
+        if (renderLabelAsSymbol) {
+            const icon = SFSymbol.named(label)
+            const labelIcon = row.addImage(icon.image)
+            labelIcon.imageSize = new Size(7, 7)
+            labelIcon.tintColor = COLOR_GREY
+            row.addSpacer(1)
+        } else {
+            const labelText = row.addText(`${label}`)
+            labelText.font = Font.boldSystemFont(fontSize)
+            labelText.textColor = COLOR_GREY
+        }
 
-        const trendIconLabel = row.addText(`${UiHelpers.getInfectionTrend(predictedIncidenceSlope)}`)
-        trendIconLabel.font = Font.systemFont(fontSize - 2)
-        trendIconLabel.textColor = UiHelpers.getTrendColor(predictedIncidenceSlope)
+        if (showTrend) {
+            const predictedIncidenceSlope = indicenceTrend ? indicenceTrend.slope : indicenceTrend
+            const trendIconLabel = row.addText(`${UiHelpers.getInfectionTrend(predictedIncidenceSlope)}`)
+            trendIconLabel.font = Font.systemFont(fontSize - 2)
+            trendIconLabel.textColor = UiHelpers.getTrendColor(predictedIncidenceSlope)
+        }
 
         const incidenceLabel = row.addText(Utils.isNumericValue(incidence) ? `${incidence.toFixed(1).replace(".", COMMA_SEPARATOR)}` : "-")
         incidenceLabel.font = Font.boldSystemFont(fontSize)
         incidenceLabel.textColor = UiHelpers.getIncidenceColor(incidence)
+        incidenceLabel.lineLimit = 1
+    }
+
+    static stabilityLevelRow(root, incidenceHistory, fontSize = 11) {
+        const row = root.addStack()
+        row.centerAlignContent()
+
+        const incidenceStabilityLevel = new IncidenceStabilityLevel(incidenceHistory)
+        const labelIcon = row.addImage(SFSymbol.named(incidenceStabilityLevel.sfSymbolName).image)
+        labelIcon.imageSize = new Size(9, 9)
+        labelIcon.tintColor = incidenceStabilityLevel.color
+        row.addSpacer(1)
+
+        const labelText = row.addText(incidenceStabilityLevel.stabilityLevel)
+        labelText.font = Font.boldSystemFont(fontSize)
+        labelText.textColor = COLOR_GREY
     }
 
     /**
@@ -484,23 +645,23 @@ class UiHelpers {
      * @param {*} width The width of the bar chart.
      * @param {*} barSpace The space between the bars.
      */
-    static drawBarChart(root, historyData, height = 12, width = 40, barSpace = 2) {
+    static drawBarChart(root, historyData, height = 12, width = 40, barSpace = 1) {
         if (!historyData || !historyData.length) {
             return;
         }
         const barCount = historyData.length
-        const maxValue = Math.max(...historyData)
+        const maxValue = Math.max(...historyData, 50)
         const ctx = new DrawContext()
         ctx.opaque = false
         ctx.size = new Size(width, height)
         ctx.respectScreenScale = true
-        const barWidth = (width - (barSpace * (historyData.length - 1))) / historyData.length
+        const barWidth = Math.min((width - (barSpace * (barCount - 1))) / barCount, 4)
 
         const barPositions = []
 
-        for (let i = 0; i < historyData.length; i++) {
-            const dataPoint = historyData[i]
-            const barX = (i === 0) ? barWidth * i : barWidth * i + (barSpace * i)
+        for (let i = 0; i < barCount; i++) {
+            const dataPoint = historyData[barCount - 1 - i]
+            const barX = width - ((barWidth * (i + 1)) + (barSpace * i))
             const barHeight = (dataPoint / maxValue) * height
             const bar = new Rect(barX, height - barHeight, barWidth, barHeight) // x, y, rect width, rect height
             ctx.setFillColor(UiHelpers.getIncidenceColor(dataPoint))
@@ -519,7 +680,7 @@ class UiHelpers {
         ctx.strokePath(xAxis)
 
         if (CONFIG.showTrendCurves) {
-            UiHelpers.drawBarChart(ctx, barPositions, height)
+            UiHelpers.drawTrendLine(ctx, barPositions, height)
         }
 
         const container = root.addStack()
@@ -719,7 +880,7 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
     const landkreisIncidence = data.landkreis.cases7_per_100k.toFixed(isLandkreisIncidenceToBeShortened ? 0 : 1)
     const incidenceLabel = incidenceRow.addText(Utils.isNumericValue(data.landkreis.cases7_per_100k) ? `${landkreisIncidence.replace(".", COMMA_SEPARATOR)}` : "-")
     incidenceLabel.font = Font.boldSystemFont(24)
-    incidenceLabel.minimumScaleFactor = 0.7
+    incidenceLabel.minimumScaleFactor = 0.8
     incidenceLabel.textColor = UiHelpers.getIncidenceColor(data.landkreis.cases7_per_100k)
 
     const landkreisTrendIconLabel = incidenceRow.addText(` ${UiHelpers.getInfectionTrend(data.landkreis.cases7_per_100k_trend.slope)}`)
@@ -730,17 +891,24 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
 
     const chartStack = incidenceRow.addStack()
     chartStack.layoutVertically()
+
     UiHelpers.drawBarChart(chartStack, data.landkreis.cases7_per_100k_history, 12, 36)
 
-    incidenceRow.addSpacer(2)
-    const casesLandkreisIncrease = Utils.isNumericValue(data.landkreis.cases) && Utils.isNumericValue(data.landkreis.cases_previous_day) ? data.landkreis.cases - data.landkreis.cases_previous_day : undefined
-    const casesLandkreisLabel = chartStack.addText(`${Utils.isNumericValue(casesLandkreisIncrease) ? `+${Math.max(casesLandkreisIncrease, 0).toLocaleString()}` : "-"}`)
-    casesLandkreisLabel.font = Font.boldSystemFont(9)
-    casesLandkreisLabel.textColor = COLOR_GREY
+    chartStack.addSpacer(1)
+
+    if (CONFIG.showIncidenceStability) {
+        UiHelpers.stabilityLevelRow(chartStack, data.landkreis.cases7_per_100k_history, 8)
+    } else {
+        // Absolute new cases
+        const casesLandkreisIncrease = Utils.isNumericValue(data.landkreis.cases) && Utils.isNumericValue(data.landkreis.cases_previous_day) ? data.landkreis.cases - data.landkreis.cases_previous_day : undefined
+        const casesLandkreisLabel = chartStack.addText(`${Utils.isNumericValue(casesLandkreisIncrease) ? `+${Math.max(casesLandkreisIncrease, 0).toLocaleString()}` : "-"}`)
+        casesLandkreisLabel.font = Font.boldSystemFont(9)
+        casesLandkreisLabel.textColor = COLOR_GREY
+    }
 
     const landkreisNameLabel = content.addText(UiHelpers.generateLandkreisName(data, customLandkreisName))
     landkreisNameLabel.font = Font.mediumSystemFont(18)
-    landkreisNameLabel.minimumScaleFactor = 0.8
+    landkreisNameLabel.minimumScaleFactor = 0.7
 
     widget.addSpacer()
 
@@ -757,7 +925,7 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
     const footerRight = footer.addStack()
     footerRight.layoutVertically()
 
-    UiHelpers.drawBarChart(footerLeft, data.landkreis.cases7_bl_per_100k_history, 12, 50, 2.5)
+    UiHelpers.drawBarChart(footerLeft, data.landkreis.cases7_bl_per_100k_history, 12, 50, 1.5)
     UiHelpers.indicenceRow(footerLeft,
         data.landkreis.cases7_bl_per_100k,
         data.landkreis.cases7_bl_per_100k_trend,
@@ -823,7 +991,7 @@ const createInfectionsWidget = (widget, data) => {
     footerLeft.layoutVertically()
 
     UiHelpers.rValueRow(footerLeft, countryData.r_value_7_days, countryData.r_value_7_days_trend, "R ", 10)
-    UiHelpers.drawBarChart(footerLeft, countryData.cases7_de_per_100k_history, 12, 50, 3)
+    UiHelpers.drawBarChart(footerLeft, countryData.cases7_de_per_100k_history, 12, 50, 1.5)
     UiHelpers.indicenceRow(footerLeft, countryData.cases7_de_per_100k, countryData.cases7_de_per_100k_trend, "DE")
 
     footer.addSpacer()
@@ -844,7 +1012,7 @@ const createInfectionsWidget = (widget, data) => {
 let widget = await createWidget(config.widgetFamily)
 
 if (!config.runsInWidget) {
-    await widget.presentMedium()
+    await widget.presentSmall()
 }
 Script.setWidget(widget)
 Script.complete()

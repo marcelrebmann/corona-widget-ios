@@ -26,6 +26,7 @@ Zur Nutzung des Widgets wird die kostenlose iOS-App [Scriptable](https://scripta
 ### **Inzidenz-Modus (Landkreis/Kreisstadt):**  
 * 7-Tages Inzidenz für Landkreis + Bundesland
 * Anstieg der absoluten Fallzahlen im Landkreis im Vergleich zum vorherigen Tag
+* Aktuelles stabiles Inzidenz-Level
 * Info zur Aktualität der Daten (RKI)
 * Kennzeichnung Kreisfreier Städte (SK)
 * Der Landkreis-Name kann durch ein eigenes Label überschrieben werden
@@ -102,7 +103,8 @@ Die WidgetParameter sind wie folgt aufgebaut:
 | GRÜN | < 35 |  
 | GELB | >= 35 |
 | ROT | >= 50 |
-| MAGENTA | >= 200 |
+| MAGENTA | >= 100 |
+| PINK | >= 200 |
 
 <br/>
 
@@ -117,6 +119,18 @@ Die WidgetParameter sind wie folgt aufgebaut:
 
 <br/>
 
+## Inzidenz-Stabilität
+Die Stabilität der Inzidenz wird unter anderem genutzt, um die Maßnahmen/Folgen/Regeln für den Einzelhandel abzuleiten. Aktuell sind dazu drei Level definiert (unter 50; 50 - 100; über 100).  
+Ein stabiles Inzidenzlevel liegt dann vor, wenn die Inzidenz in einem Landkreis drei Tage in Folge in einem der genannten Level liegt.
+
+| Stabile Inzidenz | Symbol | Aktuelle Bedeutung lt. Bundesregierung |
+| --- | --- | --- |
+| unter 50 | ![Level 1](./screenshots/stability_level_1.png) | i.d.R. Öffnung d. Einzelandel ohne Termin
+| 50 - 100 | ![Level 2](./screenshots/stability_level_2.png) | i.d.R. Öffnung d. Einzelhandels unter Auflagen (mit Termin, Click-and-meet, ...) |
+| über 100 | ![Level 3](./screenshots/stability_level_3.png) | i.d.R. Einzelhandel geschlossen, nur Abholung/Lieferung möglich |
+
+<br/>
+
 # Hinweise zu Störungen
 
 Bei technischen Problemen des RKI können möglicherweise keine/veraltete Daten im Widget angezeigt werden.
@@ -127,10 +141,58 @@ Falls die RKI-Schnittstelle zeitweise nicht verfügbar oder überlastet ist, wer
 
 Die Konfigurationen mit fixem Ort sowie der Neuinfektionen-Modus werden bei einer technischen Störung in der Regel ältere Daten angezeigt (erkennbar am Zeitstempel im Widget).
 
+<br/>
+
+# Self-Hosted Server (optional)
+Wer möchte, kann die Serverkomponente ebenfalls auf einem eigenen Server/Rechner betrieben, um die Daten des RKI für das Widget aufzubereiten.
+Zur Installation werden `Node.js` (Version >=12.x) und `npm` benötigt.
+
+### **Installation**
+
+1. **Source Code Downloaden und entpacken**  
+  `server_v1.x.zip` auf dem Zielserver entpacken. Alternativ entpacken auf dem lokalen Rechner und den source code anschließend auf den Zielserver kopieren.
+
+2. **Dependencies installieren**  
+`npm install` im Zielordner ausführen 
+
+3. **Server starten**  
+Der Server kann direkt via Node.js `node ./server.js` gestartet werden.  
+Es empfiehlt sich jedoch den Server als Service zu konfigurieren, der bspw bei einem Neustart automatisch wieder startet.
+
+__Systemd Service File Template:__
+
+```
+[Unit]
+Description=Corona Server
+
+[Service]
+Type=simple
+ExecStart=/path/to/node/ /path/to/corona-server/dist/server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+```
+
+4. **Anpassen der Server URL im Skript**  
+Die URL des selbst gehosteten Servers muss nun im Skript in `CONFIG.serverUrl` eingetragen werden.
+
+<br/>
+
 # Contributing
 Bei Verbesserungsvorschlägen/Bugs/etc gerne einen PR stellen oder ein Issue öffnen!
 
+<br/>
+
 # Changelog
+
+## Version 1.2.0
+- Erweiterung der Inzidenzwert-Historien auf die vergangenen 2 Wochen (14 Tage)
+- Aktuelles Stabilitäts-Level für Landkreis-Inzidenz hinzugefügt. ("Einzelhandels-Ampel")
+- Veröffentlichung des Server source codes mit Option zum selbst hosten
+- 100er Grenzwert für Inzidenz hinzugefügt
 
 ## Version 1.1.2
 - Behebt ein Problem, bei dem die Standortermittlung bei einer frischen Installation fehlschlagen konnte
