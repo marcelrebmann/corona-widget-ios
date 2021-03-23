@@ -101,7 +101,7 @@ Die WidgetParameter sind wie folgt aufgebaut:
 | Farbe | Inzidenz |
 | --- | --- |
 | GRÜN | < 35 |  
-| GELB | >= 35 |
+| ORANGE | >= 35 |
 | ROT | >= 50 |
 | MAGENTA | >= 100 |
 | PINK | >= 200 |
