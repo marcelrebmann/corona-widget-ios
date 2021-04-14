@@ -1,3 +1,4 @@
+import { DateUtils } from './../utils/date.utils';
 import { Helpers } from '../utils/helpers';
 import { VaccinationData, CoronaData } from './../interfaces/data.interfaces';
 import { Connector, ConnectorUpdateType } from './base.connector';
@@ -9,9 +10,7 @@ interface VaccinationDataColumnIndexes {
   bundeslandIdColumnIndex: number;
   bundeslandNameColumnIndex: number;
   vaccinationsCumulatedColumnIndex: number;
-  vaccinationDeltaCumulatedColumnIndex: number;
   vaccinationQuoteIndex: number;
-  vaccinationDeltaSecondVaccinationColumnIndex?: number;
 }
 
 /**
@@ -21,7 +20,7 @@ export class VaccinationConnector extends Connector {
 
   private readonly VACCINATION_API = "https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Daten/Impfquotenmonitoring.xlsx?__blob=publicationFile";
   private readonly VACCINATION_DATA_XLSX_FILE_PATH = path.join(__dirname, "./../../data/vaccination.xlsx");
-  private readonly VACCINATION_XLSX_SHEET_REGEX = /Gesamt.{1}bis/i;
+  private readonly VACCINATION_XLSX_SHEET_REGEX = /Impfquote.{1}bis/i;
 
   private readonly STATE_LIST: { [key: number]: string } = {
     1: "Schleswig-Holstein",
@@ -91,7 +90,7 @@ export class VaccinationConnector extends Connector {
         throw new Error("Could not find all column indexes");
       }
 
-      const vaccinationData = this.constructNewData(rows, updateCheckResult.lastModified, fetchedTimestamp, columnIndexes);
+      const vaccinationData = this.constructNewData(rows, updateCheckResult.lastModified, fetchedTimestamp, columnIndexes, cachedData);
 
       // Validation
       if (!this.isStateDataValid(vaccinationData)) {
@@ -152,9 +151,9 @@ export class VaccinationConnector extends Connector {
    * @param fetchedTimestamp The timestamp representing the time the XLSX data was fetched from RKI.
    * @param columnIndexes The set of column indexes used to find the corresponding values in the data rows.
    */
-  private constructNewData(rows: any[][], dataTimestamp: number, fetchedTimestamp: number, columnIndexes: VaccinationDataColumnIndexes): VaccinationData {
+  private constructNewData(rows: any[][], dataTimestamp: number, fetchedTimestamp: number, columnIndexes: VaccinationDataColumnIndexes, cachedData: CoronaData): VaccinationData {
     const vaccinationData = this.generateDataTemplate(dataTimestamp, fetchedTimestamp);
-    const doesSecondVaccDeltaExist = columnIndexes.vaccinationDeltaSecondVaccinationColumnIndex >= 0;
+    const isSameDayAsCachedData = DateUtils.isSameDay(dataTimestamp, cachedData.vaccination.last_updated);
 
     for (const row of rows) {
       const isRowValid = row.length > 2;
@@ -169,9 +168,21 @@ export class VaccinationConnector extends Connector {
       if (isStateRow) {
         const stateId = parseInt(row[columnIndexes.bundeslandIdColumnIndex]);
         const stateName = this.STATE_LIST[stateId] || row[columnIndexes.bundeslandNameColumnIndex];
-        const vacc_cumulated = row[columnIndexes.vaccinationsCumulatedColumnIndex];
-        const vacc_delta = row[columnIndexes.vaccinationDeltaCumulatedColumnIndex] + (doesSecondVaccDeltaExist ? row[columnIndexes.vaccinationDeltaSecondVaccinationColumnIndex] : 0);
-        const vacc_quote = row[columnIndexes.vaccinationQuoteIndex];
+        const vacc_cumulated = row[columnIndexes.vaccinationsCumulatedColumnIndex] || 0;
+        const doesHistoricVaccinationDataExist = !!cachedData
+          && !!cachedData.vaccination
+          && !!cachedData.vaccination.states
+          && !!cachedData.vaccination.states[stateId];
+
+        let vaccCumulatedPreviousDay = doesHistoricVaccinationDataExist ? (cachedData.vaccination.states[stateId].vacc_cumulated || 0) : 0;
+
+        // If data is from the same day, calculate the cumulated vaccinations by subtracting the latest increase.
+        if (isSameDayAsCachedData) {
+          vaccCumulatedPreviousDay = vaccCumulatedPreviousDay - (cachedData.vaccination.states[stateId].vacc_delta || 0);
+        }
+        // TODO: Temporary fix. Remove
+        const vacc_delta = Math.max(vacc_cumulated - vaccCumulatedPreviousDay, 0);
+        const vacc_quote = row[columnIndexes.vaccinationQuoteIndex] || 0;
 
         const stateExists = !!vaccinationData.states[stateId] && vaccinationData.states[stateId].name === stateName;
 
@@ -185,9 +196,21 @@ export class VaccinationConnector extends Connector {
       }
 
       if (isSummaryRow) {
-        vaccinationData.country.vacc_cumulated = row[columnIndexes.vaccinationsCumulatedColumnIndex];
-        vaccinationData.country.vacc_delta = row[columnIndexes.vaccinationDeltaCumulatedColumnIndex] + (doesSecondVaccDeltaExist ? row[columnIndexes.vaccinationDeltaSecondVaccinationColumnIndex] : 0);
-        vaccinationData.country.vacc_quote = row[columnIndexes.vaccinationQuoteIndex];
+        vaccinationData.country.vacc_cumulated = row[columnIndexes.vaccinationsCumulatedColumnIndex] || 0;
+
+        const doesHistoricCountryVaccinationDataExist = cachedData
+          && cachedData.vaccination
+          && cachedData.vaccination.country;
+
+        let vaccCumulatedPreviousDay = doesHistoricCountryVaccinationDataExist ? (cachedData.vaccination.country.vacc_cumulated || 0) : 0;
+
+        // If data is from the same day, calculate the cumulated vaccinations by subtracting the latest increase.
+        if (isSameDayAsCachedData) {
+          vaccCumulatedPreviousDay = vaccCumulatedPreviousDay - (cachedData.vaccination.country.vacc_delta || 0);
+        }
+        // TODO: Temporary fix. Remove
+        vaccinationData.country.vacc_delta = Math.max(vaccinationData.country.vacc_cumulated - vaccCumulatedPreviousDay, 0);
+        vaccinationData.country.vacc_quote = row[columnIndexes.vaccinationQuoteIndex] || 0;
         vaccinationData.country.vacc_per_1000 = vaccinationData.country.vacc_quote * 10;
       }
     }
@@ -206,27 +229,14 @@ export class VaccinationConnector extends Connector {
       bundeslandIdColumnIndex: undefined,
       bundeslandNameColumnIndex: undefined,
       vaccinationsCumulatedColumnIndex: undefined,
-      vaccinationDeltaCumulatedColumnIndex: undefined,
-      vaccinationQuoteIndex: undefined,
-      vaccinationDeltaSecondVaccinationColumnIndex: undefined
+      vaccinationQuoteIndex: undefined
     };
 
     for (const headerCandidate of rows) {
       const bundeslandIdColumnIndexCandidate = headerCandidate.indexOf("RS");
       const bundeslandNameColumnIndexCandidate = headerCandidate.indexOf("Bundesland");
-      const vaccinationsCumulatedColumnIndexCandidate = headerCandidate.indexOf("Gesamtzahl bisher verabreichter Impfstoffdosen");
-      const vaccinationDeltaCumulatedColumnIndexCandidate = headerCandidate.indexOf("Differenz zum Vortag");
-
-      if (vaccinationDeltaCumulatedColumnIndexCandidate !== -1) {
-        const head: unknown[] = [].concat(headerCandidate);
-        head[vaccinationDeltaCumulatedColumnIndexCandidate] = null;
-        const vaccinationDeltaSecondVaccinationColumnIndexCandidate = head.indexOf("Differenz zum Vortag");
-
-        if (vaccinationDeltaSecondVaccinationColumnIndexCandidate >= 0 && typeof columnIndexes.vaccinationDeltaSecondVaccinationColumnIndex !== "number") {
-          columnIndexes.vaccinationDeltaSecondVaccinationColumnIndex = vaccinationDeltaSecondVaccinationColumnIndexCandidate;
-        }
-      }
-      const vaccinationQuoteColumnIndexCandidate = headerCandidate.indexOf("Impf-quote, %");
+      const vaccinationsCumulatedColumnIndexCandidate = headerCandidate.indexOf("Gesamtzahl  einmalig geimpft");
+      const vaccinationQuoteColumnIndexCandidate = headerCandidate.indexOf("Gesamt");
 
       if (bundeslandIdColumnIndexCandidate >= 0 && typeof columnIndexes.bundeslandIdColumnIndex !== "number") {
         columnIndexes.bundeslandIdColumnIndex = bundeslandIdColumnIndexCandidate;
@@ -236,9 +246,6 @@ export class VaccinationConnector extends Connector {
       }
       if (vaccinationsCumulatedColumnIndexCandidate >= 0 && typeof columnIndexes.vaccinationsCumulatedColumnIndex !== "number") {
         columnIndexes.vaccinationsCumulatedColumnIndex = vaccinationsCumulatedColumnIndexCandidate;
-      }
-      if (vaccinationDeltaCumulatedColumnIndexCandidate >= 0 && typeof columnIndexes.vaccinationDeltaCumulatedColumnIndex !== "number") {
-        columnIndexes.vaccinationDeltaCumulatedColumnIndex = vaccinationDeltaCumulatedColumnIndexCandidate;
       }
       if (vaccinationQuoteColumnIndexCandidate >= 0 && typeof columnIndexes.vaccinationQuoteIndex !== "number") {
         columnIndexes.vaccinationQuoteIndex = vaccinationQuoteColumnIndexCandidate;
@@ -260,7 +267,6 @@ export class VaccinationConnector extends Connector {
       && columnIndexes.bundeslandIdColumnIndex >= 0
       && columnIndexes.bundeslandNameColumnIndex >= 0
       && columnIndexes.vaccinationsCumulatedColumnIndex >= 0
-      && columnIndexes.vaccinationDeltaCumulatedColumnIndex >= 0
       && columnIndexes.vaccinationQuoteIndex >= 0;
   }
 
@@ -279,6 +285,7 @@ export class VaccinationConnector extends Connector {
         && state.vacc_delta >= 0
         && state.vacc_per_1000 >= 0
         && state.vacc_quote >= 0;
+      console.log(vaccinationData.states[`${id}`]);
 
       if (!isStateValid) {
         Logger.error(`${this.getId()} Plausi-Check failed! BL_ID: ${state.BL_ID}, Name: ${state.name}`)
@@ -295,10 +302,17 @@ export class VaccinationConnector extends Connector {
   private isCountryDataValid(vaccinationData: VaccinationData, cachedData: CoronaData): boolean {
     return vaccinationData.country
       && vaccinationData.country.vacc_cumulated >= 0
-      && vaccinationData.country.vacc_cumulated >= (cachedData?.vaccination?.country?.vacc_cumulated || 0)
+      // TODO: Temporary fix. Remove
+      && vaccinationData.country.vacc_cumulated >= 0
+      // && vaccinationData.country.vacc_cumulated >= (cachedData?.vaccination?.country?.vacc_cumulated || 0)
+      // ---
       && vaccinationData.country.vacc_delta >= 0
       && vaccinationData.country.vacc_per_1000 >= 0
-      && vaccinationData.country.vacc_per_1000 >= (cachedData?.vaccination?.country?.vacc_per_1000 || 0)
-      && vaccinationData.country.vacc_quote >= (cachedData?.vaccination?.country?.vacc_quote || 0);
+      // TODO: Temporary fix. Remove
+      && vaccinationData.country.vacc_per_1000 >= 0
+      && vaccinationData.country.vacc_quote >= 0;
+    // && vaccinationData.country.vacc_per_1000 >= (cachedData?.vaccination?.country?.vacc_per_1000 || 0)
+    // && vaccinationData.country.vacc_quote >= (cachedData?.vaccination?.country?.vacc_quote || 0);
+    // ---
   }
 }
