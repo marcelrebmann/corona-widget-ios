@@ -8,7 +8,7 @@
  * Author: https://github.com/marcelrebmann/
  * Source: https://github.com/marcelrebmann/corona-widget-ios
  * 
- * Version: 1.2.0
+ * Version: 1.2.1
  */
 
 const CONFIG = {
@@ -42,7 +42,8 @@ const INCIDENCE_PINK = 200
 const INCIDENCE_STABILITY_LEVEL_NONE = "-";
 const INCIDENCE_STABILITY_LEVEL_1 = "<50";
 const INCIDENCE_STABILITY_LEVEL_2 = "<100";
-const INCIDENCE_STABILITY_LEVEL_3 = ">100";
+const INCIDENCE_STABILITY_LEVEL_3 = "<200";
+const INCIDENCE_STABILITY_LEVEL_4 = ">200";
 
 const COLOR_CYAN = new Color("#21b1f3")
 const COLOR_BLUE = Color.dynamic(Color.blue(), COLOR_CYAN)
@@ -302,6 +303,8 @@ class IncidenceStabilityLevel {
                 return COLOR_ORANGE
             case INCIDENCE_STABILITY_LEVEL_3:
                 return COLOR_RED
+            case INCIDENCE_STABILITY_LEVEL_4:
+                return COLOR_MAGENTA
             default:
                 return COLOR_GREY
         }
@@ -312,8 +315,10 @@ class IncidenceStabilityLevel {
             return INCIDENCE_STABILITY_LEVEL_1
         } else if (incidence < 100) {
             return INCIDENCE_STABILITY_LEVEL_2
-        } else if (incidence >= 100) {
+        } else if (incidence < 200) {
             return INCIDENCE_STABILITY_LEVEL_3
+         } else if (incidence >= 200) {
+             return INCIDENCE_STABILITY_LEVEL_4
         } else {
             return INCIDENCE_STABILITY_LEVEL_NONE
         }
@@ -332,8 +337,10 @@ class IncidenceStabilityLevel {
                 return INCIDENCE_STABILITY_LEVEL_1
             } else if (incidence < 100) {
                 return INCIDENCE_STABILITY_LEVEL_2
-            } else if (incidence >= 100) {
+            } else if (incidence < 200) {
                 return INCIDENCE_STABILITY_LEVEL_3
+            } else if (incidence >= 200) {
+                return INCIDENCE_STABILITY_LEVEL_4
             } else {
                 return INCIDENCE_STABILITY_LEVEL_NONE
             }
