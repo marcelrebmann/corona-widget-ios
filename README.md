@@ -190,7 +190,7 @@ Bei Verbesserungsvorschlägen/Bugs/etc gerne einen PR stellen oder ein Issue öf
 # Changelog
 
 ## Version 1.2.1
-- Inzidenz-Stabilitätslevel 100-200 hinzugefügt
+- Inzidenz-Stabilitätslevel "100-200" und "über 200" (Hotspot) hinzugefügt
 - [Server] Anpassung an aktuelles Format des RKI Impfquoten Report
 
 ## Version 1.2.0
