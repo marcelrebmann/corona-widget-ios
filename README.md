@@ -94,6 +94,19 @@ Die WidgetParameter sind wie folgt aufgebaut:
 
 <br/>
 
+## Erweiterte Konfiguration
+Zur erweiterten Konfiguration können die gesetzten Werte in der `CONFIG`-Variable geändert werden.  
+
+### **Optionen:**  
+
+- `serverUrl`: Adresse, unter der die Serverkomponente erreichbar ist.  
+- `showTrendCurves`: Zeichnet Trendlinien in die Charts (experimentell)  
+- `showIncidenceStability`: Ob das Inzidenz-Stabilitätslevel des Kreises - angezeigt wird  
+- `debugMode`: Aktiviert detailliertere Logs zur Fehlerbehebung  
+- `fontScaleFactor`: Skaliert die Schriftgrößen um den angegebenen Faktor  
+- `fontSize`: Definiert die Schriftgrößen  
+- `chartWidth`: Definiert die Breite der angezeigten Diagramme
+
 # Legende
 
 ## Inzidenz
@@ -191,6 +204,8 @@ Bei Verbesserungsvorschlägen/Bugs/etc gerne einen PR stellen oder ein Issue öf
 
 ## Version 1.2.1
 - Inzidenz-Stabilitätslevel "100-200" und "über 200" (Hotspot) hinzugefügt
+- Flexible Anpassung der Schriftgrößen einzeln oder per Skalierungsfaktor hinzugefügt
+- Flebible Anpassung der Diagramm-Breiten hinzugefügt
 - [Server] Anpassung an aktuelles Format des RKI Impfquoten Report
 
 ## Version 1.2.0

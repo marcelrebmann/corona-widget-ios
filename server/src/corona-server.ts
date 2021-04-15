@@ -28,7 +28,7 @@ export class CoronaServer {
 
   private readonly apiVersion = "v1";
 
-  constructor(filePathToCachedData: string, pathToBackupData: string, connectors: Connector[] = [], port: number = 4002) {
+  constructor(filePathToCachedData: string, pathToBackupData: string, connectors: Connector[] = [], port: number = 4001) {
 
     if (!filePathToCachedData || !pathToBackupData) {
       throw new Error("Not all required file paths provided!");
@@ -45,8 +45,8 @@ export class CoronaServer {
     this.port = port;
     this.dataService = new DataService(filePathToCachedData, pathToBackupData);
     this.jobs = [
-      new CronJob("0 08 * * * *", () => this.executeConnectors(ConnectorUpdateType.REGULAR)),
-      new CronJob("0 */2 * * * *", () => this.executeConnectors(ConnectorUpdateType.FREQUENT))
+      new CronJob("0 02 * * * *", () => this.executeConnectors(ConnectorUpdateType.REGULAR)),
+      new CronJob("0 */15 * * * *", () => this.executeConnectors(ConnectorUpdateType.FREQUENT))
     ];
   }
 

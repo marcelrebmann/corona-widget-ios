@@ -180,7 +180,6 @@ export class VaccinationConnector extends Connector {
         if (isSameDayAsCachedData) {
           vaccCumulatedPreviousDay = vaccCumulatedPreviousDay - (cachedData.vaccination.states[stateId].vacc_delta || 0);
         }
-        // TODO: Temporary fix. Remove
         const vacc_delta = Math.max(vacc_cumulated - vaccCumulatedPreviousDay, 0);
         const vacc_quote = row[columnIndexes.vaccinationQuoteIndex] || 0;
 
@@ -208,7 +207,6 @@ export class VaccinationConnector extends Connector {
         if (isSameDayAsCachedData) {
           vaccCumulatedPreviousDay = vaccCumulatedPreviousDay - (cachedData.vaccination.country.vacc_delta || 0);
         }
-        // TODO: Temporary fix. Remove
         vaccinationData.country.vacc_delta = Math.max(vaccinationData.country.vacc_cumulated - vaccCumulatedPreviousDay, 0);
         vaccinationData.country.vacc_quote = row[columnIndexes.vaccinationQuoteIndex] || 0;
         vaccinationData.country.vacc_per_1000 = vaccinationData.country.vacc_quote * 10;
@@ -285,7 +283,6 @@ export class VaccinationConnector extends Connector {
         && state.vacc_delta >= 0
         && state.vacc_per_1000 >= 0
         && state.vacc_quote >= 0;
-      console.log(vaccinationData.states[`${id}`]);
 
       if (!isStateValid) {
         Logger.error(`${this.getId()} Plausi-Check failed! BL_ID: ${state.BL_ID}, Name: ${state.name}`)
@@ -302,17 +299,13 @@ export class VaccinationConnector extends Connector {
   private isCountryDataValid(vaccinationData: VaccinationData, cachedData: CoronaData): boolean {
     return vaccinationData.country
       && vaccinationData.country.vacc_cumulated >= 0
-      // TODO: Temporary fix. Remove
-      && vaccinationData.country.vacc_cumulated >= 0
-      // && vaccinationData.country.vacc_cumulated >= (cachedData?.vaccination?.country?.vacc_cumulated || 0)
-      // ---
+      // && vaccinationData.country.vacc_cumulated >= 0
+      && vaccinationData.country.vacc_cumulated >= (cachedData?.vaccination?.country?.vacc_cumulated || 0)
       && vaccinationData.country.vacc_delta >= 0
       && vaccinationData.country.vacc_per_1000 >= 0
-      // TODO: Temporary fix. Remove
-      && vaccinationData.country.vacc_per_1000 >= 0
-      && vaccinationData.country.vacc_quote >= 0;
-    // && vaccinationData.country.vacc_per_1000 >= (cachedData?.vaccination?.country?.vacc_per_1000 || 0)
-    // && vaccinationData.country.vacc_quote >= (cachedData?.vaccination?.country?.vacc_quote || 0);
-    // ---
+      // && vaccinationData.country.vacc_per_1000 >= 0
+      // && vaccinationData.country.vacc_quote >= 0;
+      && vaccinationData.country.vacc_per_1000 >= (cachedData?.vaccination?.country?.vacc_per_1000 || 0)
+      && vaccinationData.country.vacc_quote >= (cachedData?.vaccination?.country?.vacc_quote || 0);
   }
 }

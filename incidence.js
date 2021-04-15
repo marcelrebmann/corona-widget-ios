@@ -18,9 +18,23 @@ const CONFIG = {
     vaccination_image_filename: "vaccine-64.png", // Do not change
     showTrendCurves: false, // Show trend curves inside the bar charts. Experimental feature.
     showIncidenceStability: true, // Show stability estimation. If false, todays absolute new cases are displayed.
-    debugMode: false // Log debug statements to console.
+    debugMode: false, // Log debug statements to console.
+    fontScaleFactor: 1, // Scales all the font sizes by a given factor.
+    fontSize: {
+        header: 13,
+        xlarge: 24,
+        large: 18,
+        medium: 14,
+        small: 11,
+        xsmall: 10,
+        tiny: 8
+    },
+    chartWidth: {
+        landkreisHistory: 36,
+        stateHistory: 50,
+        vaccinationProgress: 44
+    }
 }
-
 
 const locationApi = (location) => `https://services7.arcgis.com/mOBPykOjAyBO2ZKk/arcgis/rest/services/RKI_Landkreisdaten/FeatureServer/0/query?where=1%3D1&outFields=OBJECTID,cases7_per_100k,cases7_bl_per_100k,cases,GEN,county,BL,last_update&geometry=${location.longitude.toFixed(3)}%2C${location.latitude.toFixed(3)}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelWithin&returnGeometry=false&outSR=4326&f=json`
 const serverApi = (landkreisId) => `${CONFIG.serverUrl}?id=${landkreisId}`
@@ -95,6 +109,19 @@ const APP_STATE = {
     isMediumSize: false,
     widgetMode: undefined
 }
+
+function scaleFonts(config) {
+
+    if (!config.fontScaleFactor || config.fontScaleFactor === 1) {
+        return;
+    }
+    const fontDefinitions = Object.keys(config.fontSize);
+
+    for (const fontDefinition of fontDefinitions) {
+        config.fontSize[fontDefinition] = config.fontSize[fontDefinition] * config.fontScaleFactor;
+    }
+}
+scaleFonts(CONFIG);
 
 class Logger {
 
@@ -317,8 +344,8 @@ class IncidenceStabilityLevel {
             return INCIDENCE_STABILITY_LEVEL_2
         } else if (incidence < 200) {
             return INCIDENCE_STABILITY_LEVEL_3
-         } else if (incidence >= 200) {
-             return INCIDENCE_STABILITY_LEVEL_4
+        } else if (incidence >= 200) {
+            return INCIDENCE_STABILITY_LEVEL_4
         } else {
             return INCIDENCE_STABILITY_LEVEL_NONE
         }
@@ -509,7 +536,7 @@ class UiHelpers {
      * @param {*} label 
      * @param {*} fontSize 
      */
-    static rValueRow(root, rValue, rValueTrend, label = "", fontSize = 11) {
+    static rValueRow(root, rValue, rValueTrend, label = "", fontSize = CONFIG.fontSize.xsmall) {
         const rValuePredictedSlope = rValueTrend ? rValueTrend.slope : rValueTrend
 
         const row = root.addStack()
@@ -535,14 +562,16 @@ class UiHelpers {
      * @param {*} label Text to render in front of the incidence value.
      * @param {*} fontSize The font size of the row elements.
      */
-    static indicenceRow(root, incidence, indicenceTrend, label, fontSize = 11, showTrend = true, renderLabelAsSymbol = false) {
+    static indicenceRow(root, incidence, indicenceTrend, label, fontSize = CONFIG.fontSize.small, showTrend = true, renderLabelAsSymbol = false) {
         const row = root.addStack()
         row.centerAlignContent()
 
         if (renderLabelAsSymbol) {
             const icon = SFSymbol.named(label)
             const labelIcon = row.addImage(icon.image)
-            labelIcon.imageSize = new Size(7, 7)
+            const iconFontSize = CONFIG.fontSize.small - (4 * (CONFIG.fontScaleFactor || 1));
+            // const iconFontSize = CONFIG.fontSize.small - 4;
+            labelIcon.imageSize = new Size(iconFontSize, iconFontSize)
             labelIcon.tintColor = COLOR_GREY
             row.addSpacer(1)
         } else {
@@ -564,13 +593,14 @@ class UiHelpers {
         incidenceLabel.lineLimit = 1
     }
 
-    static stabilityLevelRow(root, incidenceHistory, fontSize = 11) {
+    static stabilityLevelRow(root, incidenceHistory, fontSize = CONFIG.fontSize.tiny) {
         const row = root.addStack()
         row.centerAlignContent()
 
         const incidenceStabilityLevel = new IncidenceStabilityLevel(incidenceHistory)
         const labelIcon = row.addImage(SFSymbol.named(incidenceStabilityLevel.sfSymbolName).image)
-        labelIcon.imageSize = new Size(9, 9)
+        const iconFontSize = CONFIG.fontSize.tiny + (CONFIG.fontScaleFactor || 1);
+        labelIcon.imageSize = new Size(iconFontSize, iconFontSize)
         labelIcon.tintColor = incidenceStabilityLevel.color
         row.addSpacer(1)
 
@@ -597,15 +627,14 @@ class UiHelpers {
             row1.centerAlignContent()
         }
         row.centerAlignContent()
-
         const vaccImage = UiHelpers.getVaccinationImage()
+
         if (vaccImage) {
             const vaccIcon = row1.addImage(vaccImage)
-            vaccIcon.imageSize = new Size(10, 10)
+            vaccIcon.imageSize = new Size(CONFIG.fontSize.xsmall, CONFIG.fontSize.xsmall)
         }
-
         const vaccPercent = row1.addText(`${vaccImage ? " " : ""}${Utils.isNumericValue(vaccinationQuote) ? `${vaccinationQuote.toFixed(vaccinationQuote >= 10 ? 1 : 2).replace(".", COMMA_SEPARATOR)}` : "-"}%`)
-        vaccPercent.font = Font.boldSystemFont(11)
+        vaccPercent.font = Font.boldSystemFont(CONFIG.fontSize.small)
         vaccPercent.textColor = COLOR_BLUE
 
         if (drawChart) {
@@ -613,7 +642,7 @@ class UiHelpers {
         }
 
         const vaccDelta = row.addText(Utils.isNumericValue(vaccinationDelta) ? `+${Utils.shortFormatNumber(vaccinationDelta)}` : "")
-        vaccDelta.font = Font.boldSystemFont(9)
+        vaccDelta.font = Font.boldSystemFont(CONFIG.fontSize.tiny)
         vaccDelta.textColor = COLOR_GREY
 
         const dataTime = new Date(dataTimestamp)
@@ -625,23 +654,9 @@ class UiHelpers {
         if (Date.now() > dataTime.getTime()) {
             const icon = SFSymbol.named("exclamationmark.arrow.triangle.2.circlepath")
             const outdatedIndicator = row1.addImage(icon.image)
-            outdatedIndicator.imageSize = new Size(8, 8)
+            outdatedIndicator.imageSize = new Size(CONFIG.fontSize.tiny, CONFIG.fontSize.tiny)
             outdatedIndicator.tintColor = COLOR_GREY
         }
-    }
-
-    /**
-     * Generates a vertical row separator symbol.
-     * The left and right space from the separator can be disabled, if needed.
-     * @param {*} root The UI element to draw the chart into.
-     * @param {*} fontSize The font size of the separator. Adjust this to match the size of the elements to separate.
-     * @param {*} textColor The color of the separator.
-     * @param {*} withSpace If true, a whitespace character will be added before and after the separator.
-     */
-    static rowSeparator(root, fontSize = 12, textColor = COLOR_GREY, withSpace = true) {
-        const separator = root.addText(withSpace ? " | " : "|")
-        separator.font = Font.systemFont(fontSize)
-        separator.textColor = textColor
     }
 
     /**
@@ -705,7 +720,7 @@ class UiHelpers {
      * @param {*} barCount How many bars to render.
      * @param {*} barSpace The space between the bars.
      */
-    static drawProgressBar(root, value, width = 44, height = 9, barHeight = 7, barCount = 10, barSpace = 2) {
+    static drawProgressBar(root, value, width = CONFIG.chartWidth.vaccinationProgress, height = 9, barHeight = 7, barCount = 10, barSpace = 2) {
         const filledBars = Math.floor(value / barCount)
         const barWidth = (width - (barSpace * (barCount - 1))) / barCount
 
@@ -852,13 +867,13 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
     headerStack.centerAlignContent()
 
     const header = headerStack.addText(INCIDENCE_HEADER)
-    header.font = Font.mediumSystemFont(13)
+    header.font = Font.mediumSystemFont(CONFIG.fontSize.header)
 
     if (isLocationFlexible) {
         headerStack.addSpacer(APP_STATE.isMediumSize ? 10 : null)
         const icon = SFSymbol.named(isCached ? "bolt.horizontal.circle" : "location")
         const flexibleLocationIndicator = headerStack.addImage(icon.image)
-        flexibleLocationIndicator.imageSize = new Size(14, 14)
+        flexibleLocationIndicator.imageSize = new Size(CONFIG.fontSize.medium, CONFIG.fontSize.medium)
         flexibleLocationIndicator.tintColor = isCached ? COLOR_GREY : COLOR_BLUE
     }
 
@@ -868,7 +883,7 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
         return;
     }
     const stateInfo = widget.addText(UiHelpers.generateDataState(data))
-    stateInfo.font = Font.systemFont(8)
+    stateInfo.font = Font.systemFont(CONFIG.fontSize.tiny)
     stateInfo.textColor = COLOR_GREY
     widget.addSpacer(10);
 
@@ -886,12 +901,12 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
     const isLandkreisIncidenceToBeShortened = Utils.isNumericValue(data.landkreis.cases7_per_100k) && data.landkreis.cases7_per_100k >= 1000;
     const landkreisIncidence = data.landkreis.cases7_per_100k.toFixed(isLandkreisIncidenceToBeShortened ? 0 : 1)
     const incidenceLabel = incidenceRow.addText(Utils.isNumericValue(data.landkreis.cases7_per_100k) ? `${landkreisIncidence.replace(".", COMMA_SEPARATOR)}` : "-")
-    incidenceLabel.font = Font.boldSystemFont(24)
+    incidenceLabel.font = Font.boldSystemFont(CONFIG.fontSize.xlarge)
     incidenceLabel.minimumScaleFactor = 0.8
     incidenceLabel.textColor = UiHelpers.getIncidenceColor(data.landkreis.cases7_per_100k)
 
     const landkreisTrendIconLabel = incidenceRow.addText(` ${UiHelpers.getInfectionTrend(data.landkreis.cases7_per_100k_trend.slope)}`)
-    landkreisTrendIconLabel.font = Font.systemFont(14)
+    landkreisTrendIconLabel.font = Font.systemFont(CONFIG.fontSize.medium)
     landkreisTrendIconLabel.textColor = UiHelpers.getTrendColor(data.landkreis.cases7_per_100k_trend.slope)
 
     incidenceRow.addSpacer()
@@ -899,22 +914,22 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
     const chartStack = incidenceRow.addStack()
     chartStack.layoutVertically()
 
-    UiHelpers.drawBarChart(chartStack, data.landkreis.cases7_per_100k_history, 12, 36)
+    UiHelpers.drawBarChart(chartStack, data.landkreis.cases7_per_100k_history, 12, CONFIG.chartWidth.landkreisHistory)
 
     chartStack.addSpacer(1)
 
     if (CONFIG.showIncidenceStability) {
-        UiHelpers.stabilityLevelRow(chartStack, data.landkreis.cases7_per_100k_history, 8)
+        UiHelpers.stabilityLevelRow(chartStack, data.landkreis.cases7_per_100k_history)
     } else {
         // Absolute new cases
         const casesLandkreisIncrease = Utils.isNumericValue(data.landkreis.cases) && Utils.isNumericValue(data.landkreis.cases_previous_day) ? data.landkreis.cases - data.landkreis.cases_previous_day : undefined
         const casesLandkreisLabel = chartStack.addText(`${Utils.isNumericValue(casesLandkreisIncrease) ? `+${Math.max(casesLandkreisIncrease, 0).toLocaleString()}` : "-"}`)
-        casesLandkreisLabel.font = Font.boldSystemFont(9)
+        casesLandkreisLabel.font = Font.boldSystemFont(CONFIG.fontSize.tiny)
         casesLandkreisLabel.textColor = COLOR_GREY
     }
 
     const landkreisNameLabel = content.addText(UiHelpers.generateLandkreisName(data, customLandkreisName))
-    landkreisNameLabel.font = Font.mediumSystemFont(18)
+    landkreisNameLabel.font = Font.mediumSystemFont(CONFIG.fontSize.large)
     landkreisNameLabel.minimumScaleFactor = 0.7
 
     widget.addSpacer()
@@ -932,7 +947,7 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
     const footerRight = footer.addStack()
     footerRight.layoutVertically()
 
-    UiHelpers.drawBarChart(footerLeft, data.landkreis.cases7_bl_per_100k_history, 12, 50, 1.5)
+    UiHelpers.drawBarChart(footerLeft, data.landkreis.cases7_bl_per_100k_history, 12, CONFIG.chartWidth.stateHistory, 1.5)
     UiHelpers.indicenceRow(footerLeft,
         data.landkreis.cases7_bl_per_100k,
         data.landkreis.cases7_bl_per_100k_trend,
@@ -950,7 +965,7 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
 
 const createInfectionsWidget = (widget, data) => {
     const headerLabel = widget.addText(INFECTIONS_HEADER)
-    headerLabel.font = Font.mediumSystemFont(13)
+    headerLabel.font = Font.mediumSystemFont(CONFIG.fontSize.header)
 
     if (!data) {
         widget.addSpacer()
@@ -961,7 +976,7 @@ const createInfectionsWidget = (widget, data) => {
     const infectionsDiff = countryData.new_cases - countryData.new_cases_previous_day
 
     const stateInfo = widget.addText(UiHelpers.generateDataState(data))
-    stateInfo.font = Font.systemFont(8)
+    stateInfo.font = Font.systemFont(CONFIG.fontSize.tiny)
     stateInfo.textColor = COLOR_GREY
     widget.addSpacer()
 
@@ -970,7 +985,7 @@ const createInfectionsWidget = (widget, data) => {
     casesStack.addSpacer()
 
     const casesLabel = casesStack.addText(`${Utils.isNumericValue(countryData.new_cases) ? countryData.new_cases.toLocaleString() : "-"}`)
-    casesLabel.font = Font.boldSystemFont(24)
+    casesLabel.font = Font.boldSystemFont(CONFIG.fontSize.xlarge)
     casesLabel.minimumScaleFactor = 0.8
 
     casesStack.addSpacer()
@@ -980,11 +995,11 @@ const createInfectionsWidget = (widget, data) => {
     casesDifferenceStack.addSpacer()
 
     const casesTrendIcon = casesDifferenceStack.addText(UiHelpers.getInfectionTrend(countryData.new_cases - countryData.new_cases_previous_day))
-    casesTrendIcon.font = Font.systemFont(14)
+    casesTrendIcon.font = Font.systemFont(CONFIG.fontSize.medium)
     casesTrendIcon.textColor = UiHelpers.getTrendColor(infectionsDiff)
 
     const casesDiffLabel = casesDifferenceStack.addText(Utils.isNumericValue(infectionsDiff) ? ` (${infectionsDiff >= 0 ? '+' : ''}${infectionsDiff.toLocaleString()})` : "-")
-    casesDiffLabel.font = Font.systemFont(14)
+    casesDiffLabel.font = Font.systemFont(CONFIG.fontSize.medium)
     casesDiffLabel.textColor = COLOR_GREY
 
     casesDifferenceStack.addSpacer()
@@ -997,8 +1012,8 @@ const createInfectionsWidget = (widget, data) => {
     const footerLeft = footer.addStack()
     footerLeft.layoutVertically()
 
-    UiHelpers.rValueRow(footerLeft, countryData.r_value_7_days, countryData.r_value_7_days_trend, "R ", 10)
-    UiHelpers.drawBarChart(footerLeft, countryData.cases7_de_per_100k_history, 12, 50, 1.5)
+    UiHelpers.rValueRow(footerLeft, countryData.r_value_7_days, countryData.r_value_7_days_trend, "R ")
+    UiHelpers.drawBarChart(footerLeft, countryData.cases7_de_per_100k_history, 12, CONFIG.chartWidth.stateHistory, 1.5)
     UiHelpers.indicenceRow(footerLeft, countryData.cases7_de_per_100k, countryData.cases7_de_per_100k_trend, "DE")
 
     footer.addSpacer()
