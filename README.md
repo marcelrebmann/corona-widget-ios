@@ -94,6 +94,19 @@ Die WidgetParameter sind wie folgt aufgebaut:
 
 <br/>
 
+## Erweiterte Konfiguration
+Zur erweiterten Konfiguration können die gesetzten Werte in der `CONFIG`-Variable geändert werden.  
+
+### **Optionen:**  
+
+- `serverUrl`: Adresse, unter der die Serverkomponente erreichbar ist.  
+- `showTrendCurves`: Zeichnet Trendlinien in die Charts (experimentell)  
+- `showIncidenceStability`: Ob das Inzidenz-Stabilitätslevel des Kreises - angezeigt wird  
+- `debugMode`: Aktiviert detailliertere Logs zur Fehlerbehebung  
+- `fontScaleFactor`: Skaliert die Schriftgrößen um den angegebenen Faktor  
+- `fontSize`: Definiert die Schriftgrößen  
+- `chartWidth`: Definiert die Breite der angezeigten Diagramme
+
 # Legende
 
 ## Inzidenz
@@ -120,14 +133,15 @@ Die WidgetParameter sind wie folgt aufgebaut:
 <br/>
 
 ## Inzidenz-Stabilität
-Die Stabilität der Inzidenz wird unter anderem genutzt, um die Maßnahmen/Folgen/Regeln für den Einzelhandel abzuleiten. Aktuell sind dazu drei Level definiert (unter 50; 50 - 100; über 100).  
+Die Stabilität der Inzidenz wird unter anderem genutzt, um die Maßnahmen/Folgen/Regeln für den Einzelhandel abzuleiten. Aktuell sind dazu vier Level definiert (unter 50; 50 - 100; 100 - 200; über 200).  
 Ein stabiles Inzidenzlevel liegt dann vor, wenn die Inzidenz in einem Landkreis drei Tage in Folge in einem der genannten Level liegt.
 
 | Stabile Inzidenz | Symbol | Aktuelle Bedeutung lt. Bundesregierung |
 | --- | --- | --- |
 | unter 50 | ![Level 1](./screenshots/stability_level_1.png) | i.d.R. Öffnung d. Einzelandel ohne Termin
 | 50 - 100 | ![Level 2](./screenshots/stability_level_2.png) | i.d.R. Öffnung d. Einzelhandels unter Auflagen (mit Termin, Click-and-meet, ...) |
-| über 100 | ![Level 3](./screenshots/stability_level_3.png) | i.d.R. Einzelhandel geschlossen, nur Abholung/Lieferung möglich |
+| 100 - 200 | ![Level 3](./screenshots/stability_level_3.png) | i.d.R. Einzelhandel geschlossen, nur Abholung/Lieferung möglich |
+| über 200 | ![Level 4](./screenshots/stability_level_4.png) | i.d.R. Hotspot-Regelungen |
 
 <br/>
 
@@ -187,6 +201,12 @@ Bei Verbesserungsvorschlägen/Bugs/etc gerne einen PR stellen oder ein Issue öf
 <br/>
 
 # Changelog
+
+## Version 1.2.1
+- Inzidenz-Stabilitätslevel "100-200" und "über 200" (Hotspot) hinzugefügt
+- Flexible Anpassung der Schriftgrößen einzeln oder per Skalierungsfaktor hinzugefügt
+- Flebible Anpassung der Diagramm-Breiten hinzugefügt
+- [Server] Anpassung an aktuelles Format des RKI Impfquoten Report
 
 ## Version 1.2.0
 - Erweiterung der Inzidenzwert-Historien auf die vergangenen 2 Wochen (14 Tage)
