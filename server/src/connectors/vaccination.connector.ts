@@ -21,6 +21,7 @@ export class VaccinationConnector extends Connector {
   private readonly VACCINATION_API = "https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Daten/Impfquotenmonitoring.xlsx?__blob=publicationFile";
   private readonly VACCINATION_DATA_XLSX_FILE_PATH = path.join(__dirname, "./../../data/vaccination.xlsx");
   private readonly VACCINATION_XLSX_SHEET_REGEX = /Impfquote.{1}bis/i;
+  private readonly VACCINATIONS_PER_DAY_DE_XLSX_SHEET_REGEX = /Impfungen.{1}pro.*Tag/i;
 
   private readonly STATE_LIST: { [key: number]: string } = {
     1: "Schleswig-Holstein",
@@ -81,8 +82,14 @@ export class VaccinationConnector extends Connector {
       const fetchedTimestamp = Date.now();
       const rows = await XlsxService.readXlsx(xlsxFilePath, this.VACCINATION_XLSX_SHEET_REGEX);
 
+      const vaccinationsDePerDayRows = await XlsxService.readXlsx(xlsxFilePath, this.VACCINATIONS_PER_DAY_DE_XLSX_SHEET_REGEX)
+
       if (!rows || !rows.length) {
         throw new Error("XLSX read error / no rows detected");
+      }
+
+      if (!vaccinationsDePerDayRows || !vaccinationsDePerDayRows.length) {
+        throw new Error("XLSX read error / no vacc de rows detected");
       }
       const columnIndexes = this.findColumnIndexes(rows);
 
@@ -90,7 +97,7 @@ export class VaccinationConnector extends Connector {
         throw new Error("Could not find all column indexes");
       }
 
-      const vaccinationData = this.constructNewData(rows, updateCheckResult.lastModified, fetchedTimestamp, columnIndexes, cachedData);
+      const vaccinationData = this.constructNewData(rows, vaccinationsDePerDayRows, updateCheckResult.lastModified, fetchedTimestamp, columnIndexes, cachedData);
 
       // Validation
       if (!this.isStateDataValid(vaccinationData)) {
@@ -147,11 +154,12 @@ export class VaccinationConnector extends Connector {
   /**
    * Constructs and returns the new vaccination data from XLSX data rows.
    * @param rows The XLSX data rows.
+   * @param vaccsPerDayDeRows The XLSX data rows for daily new vaccinations in germany.
    * @param dataTimestamp The timestamp of the XLSX data (freshness).
    * @param fetchedTimestamp The timestamp representing the time the XLSX data was fetched from RKI.
    * @param columnIndexes The set of column indexes used to find the corresponding values in the data rows.
    */
-  private constructNewData(rows: any[][], dataTimestamp: number, fetchedTimestamp: number, columnIndexes: VaccinationDataColumnIndexes, cachedData: CoronaData): VaccinationData {
+  private constructNewData(rows: any[][], vaccsPerDayDeRows: any[][], dataTimestamp: number, fetchedTimestamp: number, columnIndexes: VaccinationDataColumnIndexes, cachedData: CoronaData): VaccinationData {
     const vaccinationData = this.generateDataTemplate(dataTimestamp, fetchedTimestamp);
     const isSameDayAsCachedData = DateUtils.isSameDay(dataTimestamp, cachedData.vaccination.last_updated);
 
@@ -197,23 +205,52 @@ export class VaccinationConnector extends Connector {
       if (isSummaryRow) {
         vaccinationData.country.vacc_cumulated = row[columnIndexes.vaccinationsCumulatedColumnIndex] || 0;
 
-        const doesHistoricCountryVaccinationDataExist = cachedData
-          && cachedData.vaccination
-          && cachedData.vaccination.country;
+        // const doesHistoricCountryVaccinationDataExist = cachedData
+        //   && cachedData.vaccination
+        //   && cachedData.vaccination.country;
 
-        let vaccCumulatedPreviousDay = doesHistoricCountryVaccinationDataExist ? (cachedData.vaccination.country.vacc_cumulated || 0) : 0;
+        // let vaccCumulatedPreviousDay = doesHistoricCountryVaccinationDataExist ? (cachedData.vaccination.country.vacc_cumulated || 0) : 0;
 
         // If data is from the same day, calculate the cumulated vaccinations by subtracting the latest increase.
-        if (isSameDayAsCachedData) {
-          vaccCumulatedPreviousDay = vaccCumulatedPreviousDay - (cachedData.vaccination.country.vacc_delta || 0);
-        }
-        vaccinationData.country.vacc_delta = Math.max(vaccinationData.country.vacc_cumulated - vaccCumulatedPreviousDay, 0);
+        // if (isSameDayAsCachedData) {
+        //   vaccCumulatedPreviousDay = vaccCumulatedPreviousDay - (cachedData.vaccination.country.vacc_delta || 0);
+        // }
+        // vaccinationData.country.vacc_delta = Math.max(vaccinationData.country.vacc_cumulated - vaccCumulatedPreviousDay, 0);
+        vaccinationData.country.vacc_delta = this.getVaccinationDeltaDe(vaccsPerDayDeRows);
         vaccinationData.country.vacc_quote = row[columnIndexes.vaccinationQuoteIndex] || 0;
         vaccinationData.country.vacc_per_1000 = vaccinationData.country.vacc_quote * 10;
       }
     }
     return vaccinationData;
   }
+
+  /**
+   * Get the latest amount of first-time vaccinations in germany.
+   * @param rows 
+   * @returns 
+   */
+  private getVaccinationDeltaDe(rows: any[][]): number {
+    let maxDate: Date = null;
+    let dataRowIndex = -1;
+    rows.map((row, index) => {
+      const dateField = row ? row[0] : null;
+        if (!dateField || !dateField.getMonth) {
+          // Invalid row / no date.
+            return;
+        }
+        // Row has more recent date -> update
+        if (!maxDate || dateField.getTime() > maxDate) {
+            maxDate = dateField.getTime();
+            dataRowIndex = index;
+        }
+    });
+
+    if (!maxDate) {
+        return 0;
+    }
+    // New first-time vaccinations.
+    return rows[dataRowIndex][1];
+}
 
   /**
    * Find the column indexes within the XLSX data for vaccination data.
