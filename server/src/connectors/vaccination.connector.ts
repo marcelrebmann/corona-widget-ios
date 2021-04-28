@@ -270,7 +270,11 @@ export class VaccinationConnector extends Connector {
     for (const headerCandidate of rows) {
       const bundeslandIdColumnIndexCandidate = headerCandidate.indexOf("RS");
       const bundeslandNameColumnIndexCandidate = headerCandidate.indexOf("Bundesland");
-      const vaccinationsCumulatedColumnIndexCandidate = headerCandidate.indexOf("Gesamtzahl  einmalig geimpft");
+      let vaccinationsCumulatedColumnIndexCandidate = headerCandidate.indexOf("Gesamtzahl  begonnener Impfserien**");
+      
+      if (vaccinationsCumulatedColumnIndexCandidate === -1) {
+        vaccinationsCumulatedColumnIndexCandidate = headerCandidate.indexOf("Gesamtzahl  begonnener Impfserien")
+      }
       const vaccinationQuoteColumnIndexCandidate = headerCandidate.indexOf("Gesamt");
 
       if (bundeslandIdColumnIndexCandidate >= 0 && typeof columnIndexes.bundeslandIdColumnIndex !== "number") {
