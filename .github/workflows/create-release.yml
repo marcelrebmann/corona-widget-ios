@@ -1,0 +1,58 @@
+name: Build & Deploy
+
+on: 
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build-publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Get the version
+        id: get_version
+        run: echo ::set-output name=VERSION::$(echo $GITHUB_REF | cut -d / -f 3)
+
+      - name: Setup NodeJS 14
+        uses: actions/setup-node@v1
+        with: 
+          node-version: 14
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Makebuild
+        run: npm run-script build
+
+      - name: Create Artifact
+        run: zip -r server.zip ./dist
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GiTHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+          body_path: ./server/CHANGELOG.md
+
+      - name: Upload Release Artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./server/server.zip
+          asset_name: server-${{ steps.get_version.outputs.VERSION }}.zip
+          asset_content_type: application/zip
