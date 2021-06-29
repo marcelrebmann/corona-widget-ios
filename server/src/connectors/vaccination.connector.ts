@@ -20,7 +20,7 @@ export class VaccinationConnector extends Connector {
 
   private readonly VACCINATION_API = "https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Daten/Impfquotenmonitoring.xlsx?__blob=publicationFile";
   private readonly VACCINATION_DATA_XLSX_FILE_PATH = path.join(__dirname, "./../../data/vaccination.xlsx");
-  private readonly VACCINATION_XLSX_SHEET_REGEX = /Impfquote.{1}bis/i;
+  private readonly VACCINATION_XLSX_SHEET_REGEX = /Impfquote.*bis/i;
   private readonly VACCINATIONS_PER_DAY_DE_XLSX_SHEET_REGEX = /Impfungen.{1}pro.*Tag/i;
 
   private readonly STATE_LIST: { [key: number]: string } = {
@@ -270,10 +270,10 @@ export class VaccinationConnector extends Connector {
     for (const headerCandidate of rows) {
       const bundeslandIdColumnIndexCandidate = headerCandidate.indexOf("RS");
       const bundeslandNameColumnIndexCandidate = headerCandidate.indexOf("Bundesland");
-      let vaccinationsCumulatedColumnIndexCandidate = headerCandidate.indexOf("Gesamtzahl  begonnener Impfserien**");
+      let vaccinationsCumulatedColumnIndexCandidate = headerCandidate.indexOf("Gesamtzahl bisher verabreichter Impfungen");
       
       if (vaccinationsCumulatedColumnIndexCandidate === -1) {
-        vaccinationsCumulatedColumnIndexCandidate = headerCandidate.indexOf("Gesamtzahl  begonnener Impfserien")
+        vaccinationsCumulatedColumnIndexCandidate = headerCandidate.indexOf("Gesamtzahl bisher verabreichter Impfungen")
       }
       const vaccinationQuoteColumnIndexCandidate = headerCandidate.indexOf("Gesamt");
 
