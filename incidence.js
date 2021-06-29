@@ -12,6 +12,10 @@
  */
 
 const CONFIG = {
+    url: {
+        incidenceLandkreise: "https://services7.arcgis.com/mOBPykOjAyBO2ZKk/arcgis/rest/services/RKI_Landkreisdaten/FeatureServer/0/query?where=1%3D1&outFields=OBJECTID,GEN,BEZ,EWZ,EWZ_BL,cases,deaths,cases_per_100k,cases_per_population,BL,BL_ID,county,last_update,cases7_per_100k,recovered,EWZ_BL,cases7_bl_per_100k&returnGeometry=false&outSR=4326&f=json",
+        vaccinationApi: "https://https://rki-vaccination-data.vercel.app/api/v2"
+    },
     serverUrl: "https://cdn.marcelrebmann.de/corona", // If self-hosted server is used, enter your server url here.
     location_cache_filename: "corona_location.txt", // Do not change
     data_cache_filename: "corona_widget_data.txt", // Do not change
@@ -249,6 +253,79 @@ Cache.init()
  * and parsing operations for various purposes.
  */
 class Utils {
+
+    static CSVToArray(strData, strDelimiter = ",") {
+        // Create a regular expression to parse the CSV values.
+        var objPattern = new RegExp(
+            (
+                // Delimiters.
+                "(\\" + strDelimiter + "|\\r?\\n|\\r|^)" +
+
+                // Quoted fields.
+                "(?:\"([^\"]*(?:\"\"[^\"]*)*)\"|" +
+
+                // Standard fields.
+                "([^\"\\" + strDelimiter + "\\r\\n]*))"
+            ),
+            "gi"
+        );
+        // Create an array to hold our data. Give the array
+        // a default empty first row.
+        var arrData = [[]];
+
+        // Create an array to hold our individual pattern
+        // matching groups.
+        var arrMatches = null;
+
+        // Keep looping over the regular expression matches
+        // until we can no longer find a match.
+        while (arrMatches = objPattern.exec(strData)) {
+
+            // Get the delimiter that was found.
+            var strMatchedDelimiter = arrMatches[1];
+
+            // Check to see if the given delimiter has a length
+            // (is not the start of string) and if it matches
+            // field delimiter. If id does not, then we know
+            // that this delimiter is a row delimiter.
+            if (
+                strMatchedDelimiter.length &&
+                strMatchedDelimiter !== strDelimiter
+            ) {
+
+                // Since we have reached a new row of data,
+                // add an empty row to our data array.
+                arrData.push([]);
+
+            }
+
+            var strMatchedValue;
+
+            // Now that we have our delimiter out of the way,
+            // let's check to see which kind of value we
+            // captured (quoted or unquoted).
+            if (arrMatches[2]) {
+
+                // We found a quoted value. When we capture
+                // this value, unescape any double quotes.
+                strMatchedValue = arrMatches[2].replace(
+                    new RegExp("\"\"", "g"),
+                    "\""
+                );
+
+            } else {
+
+                // We found a non-quoted value.
+                strMatchedValue = arrMatches[3];
+
+            }
+            // Now that we have our value string, let's add
+            // it to the data array.
+            arrData[arrData.length - 1].push(strMatchedValue);
+        }
+        // Return the parsed data.
+        return arrData;
+    }
 
     static isNumericValue(number) {
         return number || number === 0
@@ -1119,4 +1196,662 @@ async function createWidget(size) {
             widget.addText("Keine Daten.")
     }
     return widget
+}
+
+
+
+class Helpers {
+    ONE_DAY_IN_MS = 86400000;
+
+    // Matches the german date strings (DD.MM.YYYY) which the RKI uses.
+    GERMAN_DATE_REGEX = /^([0-9]{2}).([0-9]{2}).([0-9]{4})/;
+
+    /**
+     * Performs a deep copy of objects and returns the copied one.
+     * Be aware:
+     * Complex types that cannot be handled by JSON such as Functions and Date objects are not supported.
+     * @param data The data object to copy deep.
+     */
+    static copyDeep(data) {
+        if (typeof data !== "object") {
+            return undefined;
+        }
+        return JSON.parse(JSON.stringify(data));
+    }
+
+    /**
+     * Writes corona data to a file on disk.
+     * @param data The data object to write to file.
+     * @param filePath The destination file path.
+     */
+    static writeToFile(data, filePath) {
+        return new Promise((res, rej) => {
+            fs.writeFile(filePath, JSON.stringify(data), (err) => {
+                if (err) {
+                    return rej();
+                }
+                return res();
+            })
+        });
+    }
+
+    /**
+     * Check, if the content of a website has changed since the last time it was visited.
+     * A HEAD request is performed and the returned last-modified date is checked against
+     * a provided timestamp.
+     * Returns if the website was modified after the provided timestamp which acts as an
+     * indicator that new, more recent data is available on this site.
+     * Also returns the modification date of the website as timestamp.
+     * @param url The URL to check.
+     * @param lastChecked Timestamp of the last time, the website was visited/checked.
+     */
+    static async isNewDataAvailable(url, lastChecked) {
+        try {
+            const response = await new Request(url, {method: "HEAD"}).load();
+
+            if (!response || response.status !== 200) {
+                throw new Error();
+            }
+            // ISO string representing a date.
+            const lastModified = response.headers["last-modified"];
+            const modifiedTimestamp = new Date(lastModified).getTime();
+            const isMoreRecentDataAvailable = modifiedTimestamp > lastChecked;
+
+            return {
+                isMoreRecentDataAvailable,
+                lastModified: modifiedTimestamp
+            }
+        } catch {
+            return {
+                isMoreRecentDataAvailable: false,
+                lastModified: null
+            };
+        }
+    }
+
+    static linearRegression(y, x) {
+        var lr = {};
+        var n = y.length;
+        var sum_x = 0;
+        var sum_y = 0;
+        var sum_xy = 0;
+        var sum_xx = 0;
+        var sum_yy = 0;
+
+        for (var i = 0; i < y.length; i++) {
+            sum_x += x[i];
+            sum_y += y[i];
+            sum_xy += (x[i] * y[i]);
+            sum_xx += (x[i] * x[i]);
+            sum_yy += (y[i] * y[i]);
+        }
+
+        lr['slope'] = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x);
+        lr['predicted_value'] = (sum_y - lr.slope * sum_x) / n;
+        lr['r2'] = Math.pow((n * sum_xy - sum_x * sum_y) / Math.sqrt((n * sum_xx - sum_x * sum_x) * (n * sum_yy - sum_y * sum_y)), 2);
+
+        return lr;
+    }
+
+    /**
+     * Compute a linear trend for a given series of numeric data.
+     * Returns the slope and the predicted value calculated via linear regression.
+     * @param yValues 
+     */
+    static computeTrend(yValues) {
+        if (!yValues || !yValues.length) {
+            return {
+                slope: null,
+                predicted_value: null
+            };
+        }
+        if (yValues.length === 1) {
+            return {
+                slope: 0,
+                predicted_value: yValues[0]
+            };
+        }
+        const xValues = yValues.map((v, i) => i);
+
+        const regression = this.linearRegression(xValues, yValues);
+
+        return regression;
+    }
+
+    /**
+     * Finds the most recent timestamp from all dates available in RKI data and returns it.
+     * Returns null, if no dates ware found within the data.
+     * @param rki_data The data received from RKI
+     */
+    static getTimestampOfFetchedData(rki_data) {
+        const last_updated_candidates = [];
+
+        for (const feature of rki_data.features) {
+            const landkreis = feature.attributes;
+            const isNewUpdatedDate = last_updated_candidates.indexOf(landkreis.last_update) === -1;
+
+            if (isNewUpdatedDate) {
+                last_updated_candidates.push(landkreis.last_update);
+            }
+        }
+
+        const rki_timestamps = last_updated_candidates.map((c) => {
+            const match = c.match(this.GERMAN_DATE_REGEX);
+
+            if (!match || !match.length) {
+                return null;
+            }
+            const day = match[1];
+            const month = match[2];
+            const year = match[3];
+            return new Date(parseInt(year), parseInt(month) - 1, parseInt(day)).getTime();
+        }).filter(c => !!c && !isNaN(c));
+
+        return rki_timestamps.length ? Math.max(...rki_timestamps) : null;
+    }
+
+    /**
+     * Rollback incidence related data for countys, states and the country as well as the historic data
+     * to the state of the previous day.
+     * This is especially useful, if an update corrupted the actual data in some way.
+     * Use with care, because only several data entries are rolled back!
+     * Common advise is to perform an update of the data shortly after rolling back.
+     * @param data The corona data to rollback.
+     */
+    static rollbackDataByOneDay(data) {
+
+        if (!data) {
+            return;
+        }
+
+        for (const landkreis of data.landkreise) {
+            landkreis.cases = landkreis.cases_previous_day;
+            landkreis.deaths = landkreis.deaths_previous_day;
+            landkreis.cases7_per_100k_history = landkreis.cases7_per_100k_history.slice(0, landkreis.cases7_per_100k_history.length - 1);
+            landkreis.cases7_bl_per_100k_history = landkreis.cases7_bl_per_100k_history.slice(0, landkreis.cases7_bl_per_100k_history.length - 1);
+        }
+
+        data.country.new_cases = data.country.new_cases_previous_day;
+        data.country.cases = data.country.cases_previous_day;
+        data.country.cases7_de_per_100k_history = data.country.cases7_de_per_100k_history.slice(0, data.country.cases7_de_per_100k_history.length - 1);
+
+        data.rki_updated = data.rki_updated - this.ONE_DAY_IN_MS;
+    }
+}
+
+
+
+// INCIDENCE
+/**
+ * Updates the incidence data and history/trends for districts, states and country.
+ * The data is based on and retrieved from the official RKI API.
+ */
+export class IncidenceConnector {
+
+    LANDKREISE_DATA_ALL = "https://services7.arcgis.com/mOBPykOjAyBO2ZKk/arcgis/rest/services/RKI_Landkreisdaten/FeatureServer/0/query?where=1%3D1&outFields=OBJECTID,GEN,BEZ,EWZ,EWZ_BL,cases,deaths,cases_per_100k,cases_per_population,BL,BL_ID,county,last_update,cases7_per_100k,recovered,EWZ_BL,cases7_bl_per_100k&returnGeometry=false&outSR=4326&f=json";
+    MAX_DAYS_IN_HISTORY = 14;
+    MAX_DAYS_FOR_TREND_CALCULATION = 14;
+
+    /**
+     * Updates the district data, if new data is available.
+     * - If no cached data is provided, the update is postponed.
+     * - Checks, if new district data data is available. If not, the update is postponed.
+     * - If no valid district data was found, the update is aborted.
+     * - If the fetched data from RKI API is from the same day and differs the cached one,
+     *   the data for the current day is corrected.
+     * @param cachedData The current cached data.
+     */
+    async update(cachedData) {
+        let rkiResponse;
+
+        try {
+            rkiResponse = await axios.get(this.LANDKREISE_DATA_ALL);
+        } catch (error) {
+            Logger.error(`${this.getId()} Request to RKI failed.`)
+            return;
+        }
+
+        if (!rkiResponse || !rkiResponse.data || !rkiResponse.data.features || !rkiResponse.data.features.length) {
+            Logger.error(`${this.getId()} Received invalid data!`);
+            return;
+        }
+        const fetchedData = rkiResponse.data;
+
+        // Deep copy of cached data
+        let actualData = cachedData ? JSON.parse(JSON.stringify(cachedData)) : {};
+
+        const timestampOfFetchedData = Helpers.getTimestampOfFetchedData(fetchedData);
+        const isFetchedDataFromSameDay = timestampOfFetchedData === actualData.rki_updated;
+        const isFetchedDataOutdated = timestampOfFetchedData < actualData.rki_updated;
+
+        if (isFetchedDataOutdated) {
+            Logger.info(`${this.getId()} Retrieved data from RKI is outdated. Checking again later.`);
+            return;
+        }
+
+        if (isFetchedDataFromSameDay) {
+
+            if (this.isDistrictDataEqualWithCache(actualData, fetchedData)) {
+                Logger.info(`${this.getId()} Data contains no updates. Keeping cached one.`);
+                return;
+            }
+            // Rollback to previous day to update today again.
+            Logger.info(`${this.getId()} Found updated data for same day. Updating with rollback.`)
+            Helpers.rollbackDataByOneDay(actualData);
+        }
+
+        // Construct new data from rki response.
+        const newData = this.constructNewData(actualData, fetchedData, timestampOfFetchedData);
+
+        // Validate new data.
+        if (!newData.landkreise || !newData.landkreise.length) {
+            Logger.error(`${this.getId()} Could not construct new updated data!`);
+            return;
+        }
+
+        if (!this.isDistrictDataValid(newData)) {
+            Logger.error(`${this.getId()} Plausi-ERROR: Landkreis data invalid.`);
+            return;
+        }
+
+        if (!this.isCountryDataValid(newData)) {
+            Logger.error(`${this.getId()} Plausi-ERROR: Country data invalid.`);
+            return;
+        }
+
+        if (!this.isMetadataValid(newData, actualData, isFetchedDataFromSameDay)) {
+            Logger.error(`${this.getId()} Plausi-ERROR: Metadata invalid.`);
+            return;
+        }
+        return newData;
+    }
+
+    /**
+     * Checks if the cached districts data of the server equals the fetched ones from RKI API. 
+     * @param cachedData The cached data.
+     * @param fetchedData The fetched data from RKI API.
+     */
+    isDistrictDataEqualWithCache(cachedData, fetchedData) {
+
+        for (let entry of fetchedData.features) {
+            const landkreis = entry.attributes;
+            const cachedLandkreis = cachedData.landkreise.find((lk) => lk.OBJECTID === landkreis.OBJECTID);
+
+            if (!cachedLandkreis) {
+                return false;
+            }
+            const isLandkreisDataEqual = landkreis.cases === cachedLandkreis.cases
+                && landkreis.cases7_per_100k === cachedLandkreis.cases7_per_100k
+                && landkreis.deaths === cachedLandkreis.deaths
+                && landkreis.cases_per_100k === cachedLandkreis.cases_per_100k
+                && landkreis.county === cachedLandkreis.county
+                && landkreis.BL === cachedLandkreis.BL
+                && landkreis.BL_ID === cachedLandkreis.BL_ID
+                && landkreis.cases7_per_100k === cachedLandkreis.cases7_per_100k
+                && landkreis.cases7_bl_per_100k === cachedLandkreis.cases7_bl_per_100k;
+
+            if (!isLandkreisDataEqual) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Constructs and returns the new data from the data received by RKI API.
+     * @param cachedData The cached data from the server.
+     * @param fetchedData The fetched data from RKI API.
+     * @param timestampOfFetchedData Timestamp of when the RKI data was fetched.
+     */
+    constructNewData(cachedData, fetchedData, timestampOfFetchedData) {
+        const data = this.generateNewDataTemplate(cachedData);
+        const fetchedDate = new Date(Date.now());
+
+        const tempBundeslandTrends = {}
+        const bundeslandIndicences = [];
+        let einwohnerzahlDe = 0;
+        const bundeslandAbsoluteCases7Days = {};
+
+        for (const feature of fetchedData.features) {
+            const landkreis = feature.attributes;
+            const cachedLandkreis = cachedData.landkreise?.find((lk) => lk.OBJECTID === landkreis.OBJECTID);
+
+            const cases7_per_100k_history = cachedLandkreis && cachedLandkreis.cases7_per_100k_history ? [].concat(cachedLandkreis.cases7_per_100k_history, landkreis.cases7_per_100k).slice(-this.MAX_DAYS_IN_HISTORY) : [landkreis.cases7_per_100k];
+            const cases7_bl_per_100k_history = cachedLandkreis && cachedLandkreis.cases7_bl_per_100k_history ? [].concat(cachedLandkreis.cases7_bl_per_100k_history, landkreis.cases7_bl_per_100k).slice(-this.MAX_DAYS_IN_HISTORY) : [landkreis.cases7_bl_per_100k];
+            const landkreisTrend = Helpers.computeTrend(cases7_per_100k_history.slice(-this.MAX_DAYS_FOR_TREND_CALCULATION));
+
+            if (!tempBundeslandTrends[landkreis.BL_ID]) {
+                tempBundeslandTrends[landkreis.BL_ID] = Helpers.computeTrend(cases7_bl_per_100k_history.slice(-this.MAX_DAYS_FOR_TREND_CALCULATION));
+                bundeslandIndicences.push(landkreis.cases7_bl_per_100k);
+            }
+
+            if (!bundeslandAbsoluteCases7Days[landkreis.BL_ID]) {
+                bundeslandAbsoluteCases7Days[landkreis.BL_ID] = landkreis.cases7_bl_per_100k / 100000 * landkreis.EWZ_BL;
+                einwohnerzahlDe += landkreis.EWZ_BL;
+            }
+
+            data.landkreise.push({
+                ...landkreis,
+                cases_previous_day: cachedLandkreis ? cachedLandkreis.cases : landkreis.cases,
+                deaths_previous_day: cachedLandkreis ? cachedLandkreis.deaths : landkreis.deaths,
+                cases7_per_100k_history,
+                cases7_bl_per_100k_history,
+                cases7_per_100k_trend: landkreisTrend,
+                cases7_bl_per_100k_trend: tempBundeslandTrends[landkreis.BL_ID]
+            });
+            data.country.cases = data.country.cases + landkreis.cases;
+        }
+        data.country.cases_previous_day = cachedData.country ? cachedData.country.cases : data.country.cases;
+        data.country.new_cases_previous_day = cachedData.country ? cachedData.country.new_cases : 0;
+        data.country.new_cases = data.country.cases - data.country.cases_previous_day;
+
+        data.country.cases7_de_per_100k = Object.values(bundeslandAbsoluteCases7Days).reduce((sum, blAbsoluteCases) => sum + blAbsoluteCases) / einwohnerzahlDe * 100000;
+        data.country.cases7_de_per_100k_history = [].concat(cachedData.country ? (cachedData.country.cases7_de_per_100k_history || []) : [], data.country.cases7_de_per_100k).slice(-this.MAX_DAYS_IN_HISTORY);
+        data.country.cases7_de_per_100k_trend = Helpers.computeTrend(data.country.cases7_de_per_100k_history.slice(-this.MAX_DAYS_FOR_TREND_CALCULATION));
+
+        data.rki_updated = timestampOfFetchedData;
+        data.rki_updated_date = new Date(data.rki_updated).toISOString();
+        data.fetched = fetchedDate.toISOString();
+        data.fetched_timestamp = fetchedDate.getTime();
+
+        return data;
+    }
+
+    /**
+     * Constructs the template for an updated version of the cached data.
+     * Uses initial/default values for incidence-related metrics.
+     * @param cachedData The cached data.
+     */
+    generateNewDataTemplate(cachedData) {
+        return {
+            landkreise: [], // Daten zu den Landkreisen.
+            country: {
+                ...cachedData.country,
+                cases: 0, // Gesamtzahl der Fälle in DE
+                cases_previous_day: 0, // Gesamtzahl der Fälle in DE am vorherigen Tag
+                new_cases: 0, // Neuinfektionen in DE
+                new_cases_previous_day: 0, // Neuinfektionen in DE am vorherigen Tag
+                cases7_de_per_100k: 0, // 7-Tage Inzidenz DE
+                cases7_de_per_100k_history: [], // Verlauf 7-Tage Inzidenz DE
+                cases7_de_per_100k_trend: {} // Trend 7-Tage Inzidenz DE
+            },
+            vaccination: cachedData ? {
+                ...cachedData.vaccination
+            } : undefined,
+            rki_updated: 0, // Zeitstempel der Daten vom RKI
+            rki_updated_date: null, // Zeitstempel der Daten vom RKI als ISO String.
+            fetched: null, // Zeitstempel der Datenabfrage vom RKI als ISO String.
+            fetched_timestamp: 0 // Zeitstempel der Datenabfrage vom RKI
+        };
+    }
+
+    /**
+     * Checks, if the district related data is valid.
+     * @param data The data to check.
+     */
+    isDistrictDataValid(data) {
+        return data.landkreise.every((lk) => {
+            const isValid = !!lk.OBJECTID &&
+                !!lk.BL_ID &&
+                !!lk.BL &&
+                !!lk.county &&
+                lk.cases7_bl_per_100k >= 0 &&
+                lk.cases7_per_100k >= 0 &&
+                lk.cases7_per_100k_history &&
+                !!lk.cases7_bl_per_100k_history &&
+                lk.cases >= 0 &&
+                lk.cases_previous_day >= 0 &&
+                // Tolerance, if a few cases were corrected.
+                // lk.cases >= Math.max(lk.cases_previous_day - 10, 0) &&
+                lk.deaths >= 0 &&
+                lk.deaths_previous_day >= 0;
+
+            if (!isValid) {
+                Logger.error(`${this.getId()} Invalid Landkreis in new data! ID: ${lk.OBJECTID}, Name: ${lk.county}`);
+                Logger.error(lk.BL_ID)
+                Logger.error(lk.BL)
+                Logger.error(lk.county)
+                Logger.error(`${lk.cases7_bl_per_100k}, ${lk.cases7_bl_per_100k >= 0}`)
+                Logger.error(`${lk.cases7_per_100k}, ${lk.cases7_per_100k >= 0}`)
+                Logger.error(`${lk.cases7_per_100k_history}, ${!!lk.cases7_per_100k_history}`)
+                Logger.error(`${lk.cases7_bl_per_100k_history}, ${!!lk.cases7_bl_per_100k_history}`)
+                Logger.error(`${lk.cases}, ${lk.cases >= 0}`)
+                Logger.error(`${lk.cases_previous_day}, ${lk.cases_previous_day >= 0}`)
+                Logger.error(`${lk.cases}, ${lk.cases_previous_day}, ${lk.cases >= lk.cases_previous_day}`)
+                Logger.error(`${lk.cases} ${lk.deaths_previous_day >= 0}`)
+            }
+            return isValid;
+        });
+    }
+
+    /**
+     * Checks, if the country data is valid.
+     * @param data The data to check.
+     */
+    isCountryDataValid(data) {
+        return data.country.cases >= 0 &&
+            data.country.cases_previous_day >= 0 &&
+            data.country.cases >= data.country.cases_previous_day &&
+            data.country.new_cases >= 0 &&
+            data.country.new_cases_previous_day >= 0 &&
+            data.country.cases7_de_per_100k >= 0 &&
+            !!data.country.cases7_de_per_100k_history;
+    }
+
+    /**
+     * Checks, if the meta data is valid.
+     * @param newData The data to check.
+     * @param cachedData The current cached data.
+     * @param isFetchedDataFromSameDay If the fetched data is from the same day as the cached one. 
+     * Indicates a correction of the data from RKI side.
+     */
+    isMetadataValid(newData, cachedData, isFetchedDataFromSameDay) {
+        return newData.rki_updated >= 0
+            && ((!isFetchedDataFromSameDay && newData.rki_updated > (cachedData.rki_updated || 0)) || (isFetchedDataFromSameDay && newData.rki_updated === cachedData.rki_updated))
+            && newData.fetched_timestamp >= 0
+            && newData.fetched_timestamp >= newData.rki_updated;
+    }
+}
+
+
+// R-VALUE
+export class RValueConnector extends Connector {
+
+    static ID = "[VACC]";
+
+    static R_VALUE_URL = "https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Projekte_RKI/Nowcasting_Zahlen_csv.csv?__blob=publicationFile";
+    static R_VALUE_XLSX_SHEET_REGEX = /Nowcast.{1}R/i;
+
+    // Possible names for the R-value column header in the XLSX.
+    static R_VALUE_HEADER_COLUMN_NAMES = ["Sch√§tzer_7_Tage_R_Wert", "Punktschätzer des 7-Tage-R Wertes"];
+
+    /**
+     * Updates the R-value data, if new data is available.
+     * - If no cached data is provided, the update is postponed.
+     * - Checks, if new R-value data is available. If not, the update is postponed.
+     * - Retrieves the XLSX file from RKI and tries to find the most recent R-value data.
+     *   R-value data of the past 7 days is taken into account for the trend calculation.
+     * - If no valid R-values were found, the update is aborted.
+     * @param cachedData The current cached data.
+     */
+    async update(cachedData) {
+
+        if (!cachedData) {
+            Logger.info(`${VaccinationConnector.ID} Postponing update until cached data exists.`);
+            return;
+        }
+        const cachedDataTimestamp = cachedData.country ? (cachedData.country.r_value_7_days_last_updated || 0) : 0
+        const dataCheckResult = await Helpers.isNewDataAvailable(this.R_VALUE_URL, cachedDataTimestamp);
+
+        if (!dataCheckResult.isMoreRecentDataAvailable) {
+            Logger.info(`${VaccinationConnector.ID} No new data for R-Value available yet.`);
+            return;
+        }
+
+        try {
+            const csvString = await new Request(RValueConnector.R_VALUE_URL).loadString();
+            const csvReport = Helpers.CSVToArray(csvString);
+
+            const fetchedTimestamp = Date.now();
+            const validRvalues = this.findValidRValues(csvReport);
+            const rValue = validRvalues[validRvalues.length - 1];
+            const rValueTrend = Helpers.computeTrend(validRvalues);
+
+            // Validation
+            if (!this.isDataValid(cachedData, rValue, rValueTrend, dataCheckResult)) {
+                throw new Error(`${VaccinationConnector.ID} R-Value Plausi-Check failed`);
+            }
+            const updatedData = Helpers.copyDeep(cachedData);
+            updatedData.country.r_value_7_days = rValue;
+            updatedData.country.r_value_7_days_trend = rValueTrend;
+            updatedData.country.r_value_7_days_last_updated = dataCheckResult.lastModified;
+            updatedData.country.r_value_7_days_fetched_timestamp = fetchedTimestamp;
+
+            return updatedData;
+        } catch (err) {
+            Logger.error(`${VaccinationConnector.ID} Could not update R-Values`);
+            Logger.error(`${err}`)
+            return;
+        }
+    }
+
+    /**
+     * Checks, if the R-value data and the calculated trend are valid.
+     * The R-value must not be negative and the data retrieved by RKI must be more recent than the cached one.
+     * @param cachedData The cached data.
+     * @param rValue The most recent R-value.
+     * @param rValueTrend The calculated trend for the R-value.
+     * @param dataCheckResult Information about the freshness check of the retrieved RKI data.
+     */
+    isDataValid(cachedData, rValue, rValueTrend, dataCheckResult) {
+        return rValue >= 0 &&
+            !!rValueTrend &&
+            dataCheckResult.lastModified >= 0 &&
+            dataCheckResult.lastModified > (cachedData.country.r_value_7_days_last_updated || 0)
+    }
+
+    /**
+     * Tries to find the R-values of the past 7 days within the XLSX data from RKI.
+     * First, the index of the R-value column is searched. If found, the most recent
+     * R-values are extracted and validated.
+     * If the column does not exist or the R-values are invalid, an error is thrown.
+     * @param rows The data rows of the XLSX file from the RKI API.
+     */
+    findValidRValues(rows) {
+        if (!rows || !rows.length) {
+            throw new Error("CSV read error / no rows detected");
+        }
+
+        let headerRowIndex;
+        let rValueColumnIndex;
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+
+            if (!row || !row.length) {
+                continue;
+            }
+
+            for (const colName of this.R_VALUE_HEADER_COLUMN_NAMES) {
+                const index = row.indexOf(colName);
+
+                if (index !== -1) {
+                    headerRowIndex = i;
+                    rValueColumnIndex = index;
+                    break;
+                }
+            }
+
+            if (typeof headerRowIndex !== "undefined" && typeof rValueColumnIndex !== "undefined") {
+                break;
+            }
+        }
+        const rValues = rows.slice(-7).map((row) => row[rValueColumnIndex]);
+
+        if (!rValues || !rValues.length) {
+            throw new Error("No R-values found");
+        }
+        const validRvalues = rValues.map(rValueString => {
+            try {
+
+                if (typeof rValueString === "string") {
+                    return parseFloat(rValueString.replace(/,/g, "."));
+                } else if (typeof rValueString === "number") {
+                    return rValueString;
+                } else {
+                    return undefined;
+                }
+            } catch {
+                return undefined;
+            }
+        }).filter((rValue) => {
+            return rValue !== null && !isNaN(rValue) && isFinite(rValue) && rValue >= 0;
+        });
+
+        if (!validRvalues || !validRvalues.length) {
+            throw new Error("No valid R-values found");
+        }
+        return validRvalues;
+    }
+}
+
+
+// VACCINATION
+export class VaccinationConnector {
+    static VACCINATION_API = "https://https://rki-vaccination-data.vercel.app/api/v2";
+
+    static async update(cachedData) {
+        const apiData = new Request(VACCINATION_API).loadJSON();
+
+        if (new Date(apiData.lastUpdate).getTime() <= new Date(cachedData.vaccination.last_updated).getTime()) {
+            Logger.info("Vaccination Data is up to date. Skipping update.");
+            return;
+        }
+
+        const stateData = apiData.data.filter(entry => entry.isState);
+        const countryData = apiData.data.filter(entry => !entry.isState && entry.name.toLowerCase() === "deutschland")[0];
+
+        if (!stateData || !stateData.length) {
+            Logger.error("No state data for vaccination found.");
+            return;
+        }
+        if (!countryData || !countryData.length) {
+            Logger.error("No country data for vaccination found.");
+            return;
+        }
+
+        for (const state of stateData) {
+            const stateId = parseInt(state.rs);
+            const vacc_cumulated = state.vaccinatedAtLeastOnce.doses || 0;
+            const doesHistoricVaccinationDataExist = !!cachedData
+                && !!cachedData.vaccination
+                && !!cachedData.vaccination.states
+                && !!cachedData.vaccination.states[stateId];
+
+            let vaccCumulatedPreviousDay = doesHistoricVaccinationDataExist ? (cachedData.vaccination.states[stateId].vacc_cumulated || 0) : 0;
+
+            // If data is from the same day, calculate the cumulated vaccinations by subtracting the latest increase.
+            if (isSameDayAsCachedData) {
+                vaccCumulatedPreviousDay = vaccCumulatedPreviousDay - (cachedData.vaccination.states[stateId].vacc_delta || 0);
+            }
+            const vacc_delta = state.vaccinatedAtLeastOnce.differenceToThePreviousDay || 0;
+            const vacc_quote = state.vaccinatedAtLeastOnce.quote || 0;
+            const vacc_quote_full = state.fullyVaccinated.quote || 0;
+
+            vaccinationData.states[stateId].vacc_cumulated = vacc_cumulated;
+            vaccinationData.states[stateId].vacc_delta = vacc_delta;
+            vaccinationData.states[stateId].vacc_quote = vacc_quote;
+            vaccinationData.states[stateId].vacc_quote_full = vacc_quote_full;
+            vaccinationData.states[stateId].vacc_per_1000 = vacc_quote * 10;
+        }
+
+        // DE
+        vaccinationData.country.vacc_cumulated = countryData.vaccinatedAtLeastOnce.doses || 0;
+        vaccinationData.country.vacc_delta = countryData.vaccinatedAtLeastOnce.differenceToThePreviousDay || 0;
+        vaccinationData.country.vacc_quote = countryData.vaccinatedAtLeastOnce.quote || 0;
+        vaccinationData.country.vacc_quote_full = countryData.fullyVaccinated.quote || 0;
+        vaccinationData.country.vacc_per_1000 = vaccinationData.country.vacc_quote * 10;
+
+        return vaccinationData;
+    }
 }
