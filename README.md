@@ -202,6 +202,9 @@ Bei Verbesserungsvorschlägen/Bugs/etc gerne einen PR stellen oder ein Issue öf
 
 # Changelog
 
+## Version 1.2.3
+- Minor fix for rki vaccination reports
+
 ## Version 1.2.1
 - Inzidenz-Stabilitätslevel "100-200" und "über 200" (Hotspot) hinzugefügt
 - Flexible Anpassung der Schriftgrößen einzeln oder per Skalierungsfaktor hinzugefügt
