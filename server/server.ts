@@ -5,7 +5,7 @@
  * Author: https://github.com/marcelrebmann/
  * Source: https://github.com/marcelrebmann/corona-widget-ios
  *
- * Version: 1.2.3
+ * Version: 1.3.0
  */
 
 import { Connector } from "./src/connectors/base.connector.js";
