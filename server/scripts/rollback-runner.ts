@@ -6,7 +6,7 @@
  *  - Incidence trend data may be inaccurate, because it is not re-calculated.
  *  - The increase/decrease for absolute new infections compared to the previous day is lost.
  */
-import { Helpers } from "../src/utils/helpers";
+import { Helpers } from "../src/utils/helpers.js";
 import path from "path";
 const FILE_PATH = path.join(__dirname, "../data/data.json");
 const data = require(FILE_PATH);

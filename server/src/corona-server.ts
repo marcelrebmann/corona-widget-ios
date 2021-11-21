@@ -1,10 +1,9 @@
-import { Connector, ConnectorUpdateType } from './connectors/base.connector';
-import { District, CoronaResponse, SingleVaccinationData } from "./interfaces/data.interfaces";
-import { DataService } from "./services/data.service";
+import { Connector, ConnectorUpdateType } from './connectors/base.connector.js';
+import { District, CoronaResponse, SingleVaccinationData } from "./interfaces/data.interfaces.js";
+import { DataService } from "./services/data.service.js";
 import { CronJob } from "cron";
 import express from "express";
-import Logger from "./services/logger.service";
-import bodyParser from "body-parser";
+import Logger from "./services/logger.service.js";
 
 export class CoronaServer {
 
@@ -45,8 +44,8 @@ export class CoronaServer {
     this.port = port;
     this.dataService = new DataService(filePathToCachedData, pathToBackupData);
     this.jobs = [
-      new CronJob("0 02 * * * *", () => this.executeConnectors(ConnectorUpdateType.REGULAR)),
-      new CronJob("0 */15 * * * *", () => this.executeConnectors(ConnectorUpdateType.FREQUENT))
+      new CronJob("0 5 * * * *", () => this.executeConnectors(ConnectorUpdateType.REGULAR)),
+      new CronJob("0 */2 * * * *", () => this.executeConnectors(ConnectorUpdateType.FREQUENT))
     ];
   }
 
@@ -54,7 +53,7 @@ export class CoronaServer {
    * Sets up the middlewares for the express server instance.
    */
   setupMiddleware() {
-    this.app.use(bodyParser.json());
+    this.app.use(express.json());
     this.app.use(express.static("public"));
   }
 

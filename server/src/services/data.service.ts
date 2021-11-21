@@ -1,8 +1,8 @@
-import { Helpers } from "../utils/helpers";
-import { CoronaData } from "./../interfaces/data.interfaces";
+import { Helpers } from "../utils/helpers.js";
+import { CoronaData } from "./../interfaces/data.interfaces.js";
 import path from "path";
 import fs from "fs";
-import Logger from "./logger.service";
+import Logger from "./logger.service.js";
 
 /**
  * The data service manages the cache for the corona data.
@@ -46,7 +46,8 @@ export class DataService {
 
         try {
             // Load the persisted version of the cached data, if available.
-            this.cachedData = require(this.pathToCachedFile);
+            const rawData = fs.readFileSync(pathToCachedFile, {encoding: 'utf-8'});
+            this.cachedData = JSON.parse(rawData);
         } catch (err) {
             Logger.warn(`${this.id} No cached data found.`);
         }

@@ -52,6 +52,8 @@ export interface VaccinationStats {
     vacc_delta: number;
     vacc_per_1000: number;
     vacc_quote: number;
+    vacc_quote_fully_vaccinated: number;
+    vacc_quote_booster?: number;
 }
 
 export interface VaccinationState extends VaccinationStats {

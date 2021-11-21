@@ -1,8 +1,8 @@
-import { Helpers } from '../utils/helpers';
-import { CoronaData, PredictedTrend, District, RkiResponse, RkiDistrict } from './../interfaces/data.interfaces';
-import { Connector, ConnectorUpdateType } from './base.connector';
+import { Helpers } from '../utils/helpers.js';
+import { CoronaData, PredictedTrend, District, RkiResponse, RkiDistrict } from './../interfaces/data.interfaces.js';
+import { Connector, ConnectorUpdateType } from './base.connector.js';
 import axios from "axios";
-import Logger from "../services/logger.service";
+import Logger from "../services/logger.service.js";
 
 /**
  * Updates the incidence data and history/trends for districts, states and country.

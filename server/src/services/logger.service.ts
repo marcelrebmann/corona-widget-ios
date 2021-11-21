@@ -1,7 +1,10 @@
 import winston from "winston";
 import "winston-daily-rotate-file";
 import { format } from "logform";
-import path from "path";
+import path, {dirname} from "path";
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const LOG_DIRECTORY = path.join(__dirname, "../../logs");
 const isInProductionEnv = process.env.NODE_ENV === "production";

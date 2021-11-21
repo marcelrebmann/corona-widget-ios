@@ -3,15 +3,17 @@
     "display": "Node 12",
    
     "compilerOptions": {
-      "lib": ["es2019", "es2020.promise", "es2020.bigint", "es2020.string"],
-      "module": "commonjs",
-      "target": "es2019",
+      "lib": ["es2020", "DOM"],
+      "module": "es2020",
+      "target": "es2020",
+      "moduleResolution": "Node",
       "strict": true,
-      "esModuleInterop": true,
-      "skipLibCheck": true,
-      "forceConsistentCasingInFileNames": true,
+      // "skipLibCheck": true,
+      // "forceConsistentCasingInFileNames": true,
       "strictNullChecks": false,
-      "outDir": "dist"
+      "outDir": "dist",
+      // "experimentalDecorators": true,
+      "allowSyntheticDefaultImports": true
     },
     "include": [
       "src/**/*",
@@ -20,5 +22,5 @@
       "public/**/*",
       "./package.json"
     ],
-    "exclude": ["node_modules", "**/*.spec.ts"]
+    "exclude": ["node_modules", "**/*.spec.ts", "dist"]
   }

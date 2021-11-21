@@ -1,7 +1,9 @@
-const readXlsxFile = require("read-excel-file/node");
+// import readXlsxFile from "read-excel-file/node";
 import axios from "axios";
 import fs from "fs";
-import Logger from "../services/logger.service";
+import Logger from "../services/logger.service.js";
+
+declare const readXlsxFile: any;
 
 interface XlsxSheet {
   readonly name: string;
@@ -43,7 +45,7 @@ export class XlsxService {
       let targetSheetIndex = 1;
 
       if (!!sheetNameRegex) {
-        const sheets = await readXlsxFile(filePath, { getSheets: true });
+        const sheets: any[] = await readXlsxFile(filePath, { getSheets: true } as any) as any;
 
         if (!sheets || !sheets.length) {
           throw new Error("XLSX contains no sheets.");

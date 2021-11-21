@@ -1,10 +1,13 @@
-import { HeadRequestResult } from './../utils/helpers';
-import { Helpers } from '../utils/helpers';
-import { CoronaData, PredictedTrend } from './../interfaces/data.interfaces';
-import { Connector, ConnectorUpdateType } from './base.connector';
-import path from "path";
-import Logger from "../services/logger.service";
-import { XlsxService } from "../services/xlsx.service";
+import { HeadRequestResult } from './../utils/helpers.js';
+import { Helpers } from '../utils/helpers.js';
+import { CoronaData, PredictedTrend } from './../interfaces/data.interfaces.js';
+import { Connector, ConnectorUpdateType } from './base.connector.js';
+import path, {dirname} from "path";
+import Logger from "../services/logger.service.js";
+import { XlsxService } from "../services/xlsx.service.js";
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Updates the R-value data based on the official published RKI XLSX report file.
