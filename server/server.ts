@@ -12,6 +12,7 @@ import { Connector } from "./src/connectors/base.connector.js";
 import { VaccinationConnector } from "./src/connectors/vaccination.connector.js";
 import { IncidenceConnector } from "./src/connectors/incidence.connector.js";
 import { RValueConnector } from "./src/connectors/rvalue.connector.js";
+import { HospitalizationConnector } from './src/connectors/hospitalization.connector.js';
 import { CoronaServer } from "./src/corona-server.js";
 import path, {dirname} from "path";
 import { fileURLToPath } from 'url';
@@ -42,6 +43,7 @@ const CONNECTORS: Connector[] = [
 	new IncidenceConnector(),
 	new RValueConnector(),
 	new VaccinationConnector(),
+	new HospitalizationConnector()
 ];
 
 const PORT = parseInt(process.env.PORT) || 4001;

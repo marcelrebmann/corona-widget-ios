@@ -7,6 +7,7 @@ import { Connector, ConnectorUpdateType } from "./base.connector.js";
 import path, { dirname } from "path";
 import Logger from "../services/logger.service.js";
 import { fileURLToPath } from "url";
+import { States } from "../shared/states.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -21,25 +22,25 @@ export class VaccinationConnector extends Connector {
   private readonly VACCINATION_DATA_FILE_PATH = path.join(__dirname, "./../../data/");
   private readonly VACCINATION_REPORT_FILENAME = "vaccination_report.csv";
 
-  private readonly STATE_LIST: { [key: number]: string } = {
-    1: "Schleswig-Holstein",
-    2: "Hamburg",
-    3: "Niedersachsen",
-    4: "Bremen",
-    5: "Nordrhein-Westfalen",
-    6: "Hessen",
-    7: "Rheinland-Pfalz",
-    8: "Baden-Württemberg",
-    9: "Bayern",
-    10: "Saarland",
-    11: "Berlin",
-    12: "Brandenburg",
-    13: "Mecklenburg-Vorpommern",
-    14: "Sachsen",
-    15: "Sachsen-Anhalt",
-    16: "Thüringen",
-  };
-  private readonly STATE_NAMES = Object.values(this.STATE_LIST);
+  // private readonly STATE_LIST: { [key: number]: string } = {
+  //   1: "Schleswig-Holstein",
+  //   2: "Hamburg",
+  //   3: "Niedersachsen",
+  //   4: "Bremen",
+  //   5: "Nordrhein-Westfalen",
+  //   6: "Hessen",
+  //   7: "Rheinland-Pfalz",
+  //   8: "Baden-Württemberg",
+  //   9: "Bayern",
+  //   10: "Saarland",
+  //   11: "Berlin",
+  //   12: "Brandenburg",
+  //   13: "Mecklenburg-Vorpommern",
+  //   14: "Sachsen",
+  //   15: "Sachsen-Anhalt",
+  //   16: "Thüringen",
+  // };
+  // private readonly STATE_NAMES = Object.values(this.STATE_LIST);
 
   constructor() {
     super("[VACC]", ConnectorUpdateType.FREQUENT);
@@ -181,7 +182,7 @@ export class VaccinationConnector extends Connector {
       fetched_timestamp: fetched,
     };
 
-    this.STATE_NAMES.map((state, index) => {
+    States.STATE_NAMES.map((state, index) => {
       const stateId: number = index + 1;
       template.states[stateId] = {
         name: state,
@@ -225,10 +226,10 @@ export class VaccinationConnector extends Connector {
       const stateId = parseInt(row.BundeslandId_Impfort);
       const isSummaryRow = stateNameCandidate === "Deutschland" && stateId === 0;
       const isStateRow =
-        isRowValid && !isSummaryRow && this.STATE_NAMES.includes(stateNameCandidate) && this.STATE_NAMES[stateId - 1] === stateNameCandidate;
+        isRowValid && !isSummaryRow && States.STATE_NAMES.includes(stateNameCandidate) && States.STATE_NAMES[stateId - 1] === stateNameCandidate;
 
       if (isStateRow) {
-        const stateName = this.STATE_LIST[stateId];
+        const stateName = States.STATE_LIST[stateId];
         const vacc_cumulated = parseFloat(row.Impfungen_gesamt_min1) || 0;
         const doesHistoricVaccinationDataExist =
           !!cachedData &&

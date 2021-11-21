@@ -204,6 +204,9 @@ export class IncidenceConnector extends Connector {
       vaccination: cachedData ? {
         ...cachedData.vaccination
       } : undefined,
+      hospitalization: cachedData ? {
+        ...cachedData.hospitalization
+      } : undefined,
       rki_updated: 0, // Zeitstempel der Daten vom RKI
       rki_updated_date: null, // Zeitstempel der Daten vom RKI als ISO String.
       fetched: null, // Zeitstempel der Datenabfrage vom RKI als ISO String.

@@ -1,12 +1,11 @@
-import { Connector, ConnectorUpdateType } from './connectors/base.connector.js';
-import { District, CoronaResponse, SingleVaccinationData } from "./interfaces/data.interfaces.js";
+import { Connector, ConnectorUpdateType } from "./connectors/base.connector.js";
+import { District, CoronaResponse, SingleVaccinationData, SingleHospitalizationData } from "./interfaces/data.interfaces.js";
 import { DataService } from "./services/data.service.js";
 import { CronJob } from "cron";
 import express from "express";
 import Logger from "./services/logger.service.js";
 
 export class CoronaServer {
-
   // The identifier for log statements.
   private readonly id: string = "[COVID]";
 
@@ -27,8 +26,12 @@ export class CoronaServer {
 
   private readonly apiVersion = "v1";
 
-  constructor(filePathToCachedData: string, pathToBackupData: string, connectors: Connector[] = [], port: number = 4001) {
-
+  constructor(
+    filePathToCachedData: string,
+    pathToBackupData: string,
+    connectors: Connector[] = [],
+    port: number = 4001
+  ) {
     if (!filePathToCachedData || !pathToBackupData) {
       throw new Error("Not all required file paths provided!");
     }
@@ -38,14 +41,14 @@ export class CoronaServer {
     }
 
     if (!connectors || !connectors.length) {
-      Logger.warn(`${this.id} No connectors specified! The data will never update.`)
+      Logger.warn(`${this.id} No connectors specified! The data will never update.`);
     }
     this.connectors = connectors;
     this.port = port;
     this.dataService = new DataService(filePathToCachedData, pathToBackupData);
     this.jobs = [
       new CronJob("0 02 * * * *", () => this.executeConnectors(ConnectorUpdateType.REGULAR)),
-      new CronJob("0 0 * * * *", () => this.executeConnectors(ConnectorUpdateType.FREQUENT))
+      new CronJob("0 0 * * * *", () => this.executeConnectors(ConnectorUpdateType.FREQUENT)),
     ];
   }
 
@@ -85,29 +88,50 @@ export class CoronaServer {
         return response.status(500).send();
       }
 
-      const landkreis: District = cachedData.landkreise.find((lk: District) => lk.OBJECTID === landkreisId) || {} as District;
-      const stateVaccinationData = cachedData.vaccination && cachedData.vaccination.states ? cachedData.vaccination.states[landkreis.BL_ID] : undefined;
+      const landkreis: District =
+        cachedData.landkreise.find((lk: District) => lk.OBJECTID === landkreisId) || ({} as District);
+      const stateVaccinationData =
+        cachedData.vaccination && cachedData.vaccination.states
+          ? cachedData.vaccination.states[landkreis.BL_ID]
+          : undefined;
+      const stateHospitalizationData =
+        cachedData.hospitalization && cachedData.hospitalization.states
+          ? cachedData.hospitalization.states[landkreis.BL_ID]
+          : undefined;
 
       const res: CoronaResponse = {
         landkreis: {
-          ...landkreis
+          ...landkreis,
         },
         country: {
-          ...cachedData.country
+          ...cachedData.country,
         },
-        vaccination: cachedData.vaccination ? {
-          state: stateVaccinationData,
-          country: {
-            ...cachedData.vaccination.country
-          },
-          last_updated: cachedData.vaccination.last_updated,
-          fetched_timestamp: cachedData.vaccination.fetched_timestamp
-        } : {} as SingleVaccinationData,
+        vaccination: cachedData.vaccination
+          ? {
+              state: stateVaccinationData,
+              country: {
+                ...cachedData.vaccination.country,
+              },
+              last_updated: cachedData.vaccination.last_updated,
+              fetched_timestamp: cachedData.vaccination.fetched_timestamp,
+            }
+          : ({} as SingleVaccinationData),
+        hospitalization: cachedData.hospitalization
+          ? {
+              state: stateHospitalizationData,
+              country: {
+                ...cachedData.hospitalization.country,
+              },
+              last_updated: cachedData.hospitalization.last_updated,
+              fetched_timestamp: cachedData.hospitalization.fetched_timestamp,
+            }
+          : ({} as SingleHospitalizationData),
         rki_updated: cachedData.rki_updated,
         rki_updated_date: cachedData.rki_updated_date,
         fetched: cachedData.fetched,
         fetched_timestamp: cachedData.fetched_timestamp,
-        version: this.apiVersion
+        version: this.apiVersion,
+        license: "Robert Koch-Institut (RKI), dl-de/by-2-0",
       };
 
       return response.status(200).send(res);
@@ -122,7 +146,19 @@ export class CoronaServer {
       if (!cachedData || !cachedData.vaccination) {
         return response.status(500).send();
       }
-      return response.status(200).send(cachedData.vaccination);
+      return response.status(200).send({...cachedData.vaccination, license: "Robert Koch-Institut (RKI), dl-de/by-2-0"});
+    });
+
+    /**
+     * Returns the hospitalization data for all states.
+     * If no cached (hospitalization) data is available yet, the request is rejected.
+     */
+    this.app.get("/hospitalization", (request, response) => {
+      const cachedData = this.dataService.getCachedData();
+      if (!cachedData || !cachedData.hospitalization) {
+        return response.status(500).send();
+      }
+      return response.status(200).send({...cachedData.hospitalization, license: "Robert Koch-Institut (RKI), dl-de/by-2-0"});
     });
   }
 
@@ -140,7 +176,7 @@ export class CoronaServer {
     this.setupRoutes();
     this.app.listen(this.port, () => {
       Logger.info(`${this.id} App running on port ${this.port}`);
-      this.jobs.forEach(job => job.start());
+      this.jobs.forEach((job) => job.start());
       Logger.info(`${this.id} Cron Jobs started.`);
     });
   }

@@ -46,7 +46,13 @@ export interface Country {
     r_value_7_days_trend: PredictedTrend;
     r_value_7_days_last_updated: number;
     r_value_7_days_fetched_timestamp: number;
+    hospitalization_incidence_7_days: number;
+    hospitalization_incidence_7_cases: number;
 }
+
+// =========================================================
+// Vaccination
+// =========================================================
 
 export interface VaccinationStats {
     vacc_cumulated: number;
@@ -85,6 +91,46 @@ export interface SingleVaccinationData {
     fetched_timestamp: number;
 }
 
+// =========================================================
+// Hospitalization
+// =========================================================
+
+
+export interface HospitalizationStats {
+    hospitalization_incidence: number;
+    hospitalization_cases: number;
+}
+
+export interface HospitalizationState extends HospitalizationStats {
+    name: string;
+    BL_ID: string;
+}
+
+/**
+ * The vaccination data of all states and the country.
+ */
+export interface HospitalizationData {
+    states: {
+        [key: string]: HospitalizationState;
+    };
+    country: HospitalizationStats;
+    last_updated: number;
+    fetched_timestamp: number;
+}
+
+/**
+ * The constructed hospitalization data for a single state only.
+ * This is part of the {@link CoronaResponse}.
+ */
+export interface SingleHospitalizationData {
+    state: HospitalizationState;
+    country: HospitalizationStats;
+    last_updated: number;
+    fetched_timestamp: number;
+}
+
+// =========================================================
+
 export interface PredictedTrend {
     readonly slope: number;
     readonly predicted_value: number;
@@ -104,6 +150,7 @@ export interface CoronaData extends Timestamps {
     landkreise: District[];
     country: Country;
     vaccination: VaccinationData;
+    hospitalization: HospitalizationData;
 }
 
 /**
@@ -113,7 +160,9 @@ export interface CoronaResponse extends Timestamps {
     landkreis: District;
     country: Country;
     vaccination: SingleVaccinationData;
+    hospitalization: SingleHospitalizationData;
     version?: string;
+    license: string;
 }
 
 /**
