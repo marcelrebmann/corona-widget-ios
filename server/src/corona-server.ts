@@ -8,7 +8,7 @@ import Logger from "./services/logger.service.js";
 export class CoronaServer {
 
   // The identifier for log statements.
-  private readonly id: string = "[COVID]"
+  private readonly id: string = "[COVID]";
 
   // The express server instance.
   private app: express.Express;

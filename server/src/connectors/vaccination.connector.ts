@@ -1,4 +1,4 @@
-import { RkiVaccinationReportBundesland } from "./../interfaces/vaccination.interfaces";
+import { RkiVaccinationReportBundesland } from "./../interfaces/vaccination.interfaces.js";
 import { CsvService } from "./../services/csv.service.js";
 import { DateUtils } from "./../utils/date.utils.js";
 import { Helpers } from "../utils/helpers.js";
@@ -79,8 +79,9 @@ export class VaccinationConnector extends Connector {
         return;
       }
 
-      let rows: RkiVaccinationReportBundesland[] = await this.loadNewReportFile(
-        this.VACCINATION_QUOTES_MOST_RECENT_REPORT_CSV_URL
+      const rows: RkiVaccinationReportBundesland[] = await CsvService.downloadAndReadCsv(
+        this.VACCINATION_QUOTES_MOST_RECENT_REPORT_CSV_URL,
+        `${this.VACCINATION_DATA_FILE_PATH}${this.VACCINATION_REPORT_FILENAME}`
       );
       let fetchedTimestamp = Date.now();
       let reportDate = new Date(rows[0].Datum);
@@ -314,16 +315,16 @@ export class VaccinationConnector extends Connector {
     );
   }
 
-  private async loadNewReportFile(downloadUrl: string): Promise<RkiVaccinationReportBundesland[]> {
-    const reportCsvFilepath = await CsvService.downloadCsv(
-      downloadUrl,
-      `${this.VACCINATION_DATA_FILE_PATH}${this.VACCINATION_REPORT_FILENAME}`
-    );
-    if (!reportCsvFilepath) {
-      throw new Error("CSV download error");
-    }
-    const data = await Helpers.readFile(reportCsvFilepath);
-    const rows: RkiVaccinationReportBundesland[] = await CsvService.parseCsv(data);
-    return rows;
-  }
+  // private async loadNewReportFile(downloadUrl: string): Promise<RkiVaccinationReportBundesland[]> {
+  //   const reportCsvFilepath = await CsvService.downloadCsv(
+  //     downloadUrl,
+  //     `${this.VACCINATION_DATA_FILE_PATH}${this.VACCINATION_REPORT_FILENAME}`
+  //   );
+  //   if (!reportCsvFilepath) {
+  //     throw new Error("CSV download error");
+  //   }
+  //   const data = await Helpers.readFile(reportCsvFilepath);
+  //   const rows: RkiVaccinationReportBundesland[] = await CsvService.parseCsv(data);
+  //   return rows;
+  // }
 }

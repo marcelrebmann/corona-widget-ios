@@ -40,7 +40,7 @@ const DATA_BACKUP_FILEPATH = path.join(
  */
 const CONNECTORS: Connector[] = [
 	new IncidenceConnector(),
-	// new RValueConnector(),
+	new RValueConnector(),
 	new VaccinationConnector(),
 ];
 

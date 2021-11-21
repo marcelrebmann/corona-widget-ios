@@ -42,6 +42,7 @@ export interface Country {
     cases7_de_per_100k_history: number[];
     cases7_de_per_100k_trend: PredictedTrend;
     r_value_7_days: number;
+    r_value_7_days_date?: string;
     r_value_7_days_trend: PredictedTrend;
     r_value_7_days_last_updated: number;
     r_value_7_days_fetched_timestamp: number;

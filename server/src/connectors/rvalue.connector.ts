@@ -1,11 +1,17 @@
-import { HeadRequestResult } from './../utils/helpers.js';
-import { Helpers } from '../utils/helpers.js';
-import { CoronaData, PredictedTrend } from './../interfaces/data.interfaces.js';
-import { Connector, ConnectorUpdateType } from './base.connector.js';
-import path, {dirname} from "path";
+import { CsvService } from "./../services/csv.service.js";
+import { Helpers } from "../utils/helpers.js";
+import { CoronaData, PredictedTrend } from "./../interfaces/data.interfaces.js";
+import { Connector, ConnectorUpdateType } from "./base.connector.js";
+import path, { dirname } from "path";
 import Logger from "../services/logger.service.js";
-import { XlsxService } from "../services/xlsx.service.js";
-import { fileURLToPath } from 'url';
+import { fileURLToPath } from "url";
+import { DateUtils } from "../utils/date.utils.js";
+import { RkiRValueReportDay } from "../interfaces/r-value.interfaces.js";
+
+interface RValueDataPoint {
+  date: string;
+  rValue: number;
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -13,13 +19,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * Updates the R-value data based on the official published RKI XLSX report file.
  */
 export class RValueConnector extends Connector {
-
-  private readonly R_VALUE_URL = "https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Projekte_RKI/Nowcasting_Zahlen.xlsx?__blob=publicationFile";
-  private readonly XLSX_FILE_PATH = path.join(__dirname, "./../../data/rvalue.xlsx");
-  private readonly R_VALUE_XLSX_SHEET_REGEX = /Nowcast.{1}R/i;
-
-  // Possible names for the R-value column header in the XLSX.
-  private readonly R_VALUE_HEADER_COLUMN_NAMES = ["Punktschätzer des 7-Tage-R Wertes"];
+  private readonly R_VALUE_REPORT_CSV_URL =
+    "https://raw.githubusercontent.com/robert-koch-institut/SARS-CoV-2-Nowcasting_und_-R-Schaetzung/main/Nowcast_R_aktuell.csv";
+  private readonly CSV_FILE_PATH = path.join(__dirname, "./../../data/rvalue.csv");
 
   constructor() {
     super("[R_VAL]", ConnectorUpdateType.FREQUENT);
@@ -35,45 +37,67 @@ export class RValueConnector extends Connector {
    * @param cachedData The current cached data.
    */
   public async update(cachedData: CoronaData): Promise<any> {
-
     if (!cachedData) {
       Logger.info(`${this.getId()} Postponing update until cached data exists.`);
       return;
     }
-    const cachedDataTimestamp = cachedData.country ? (cachedData.country.r_value_7_days_last_updated || 0) : 0
-    const dataCheckResult = await Helpers.isNewDataAvailable(this.R_VALUE_URL, cachedDataTimestamp);
-
-    if (!dataCheckResult.isMoreRecentDataAvailable) {
-      Logger.info(`${this.getId()} No new data for R-Value available yet.`);
-      return;
-    }
+    const cachedDataTimestamp = cachedData.country ? cachedData.country.r_value_7_days_last_updated || 0 : 0;
+    const lastUpdatedDate = new Date(cachedDataTimestamp);
 
     try {
-      const xlsxFilePath = await XlsxService.downloadXlsx(this.R_VALUE_URL, this.XLSX_FILE_PATH);
+      const rValueRows: RkiRValueReportDay[] = await CsvService.downloadAndReadCsv(
+        this.R_VALUE_REPORT_CSV_URL,
+        this.CSV_FILE_PATH
+      );
 
-      if (!xlsxFilePath) {
-        throw new Error("XLSX download failed");
+      if (!rValueRows || rValueRows.length <= 0) {
+        throw new Error("CSV no rows detected");
       }
       const fetchedTimestamp = Date.now();
-      const rows = await XlsxService.readXlsx(xlsxFilePath, this.R_VALUE_XLSX_SHEET_REGEX);
-      const validRvalues = this.findValidRValues(rows);
-      const rValue = validRvalues[validRvalues.length - 1];
-      const rValueTrend = Helpers.computeTrend(validRvalues);
+      const todayDate = new Date(Date.now());
+
+      const isBeforeNextPlannedRefresh = DateUtils.isBefore(
+        DateUtils.getTomorrow(lastUpdatedDate).getTime(),
+        todayDate.getTime()
+      );
+
+      // No refresh needed yet. Cached data is actual.
+      if (isBeforeNextPlannedRefresh) {
+        Logger.info(`${this.getId()} No new data for R-Value available yet.`);
+        return;
+      }
+
+      const validRvalues = this.findValidRValues(rValueRows);
+      const mostRecentDataPoint = validRvalues[0];
+      const mostRecentDataPointDate = new Date(mostRecentDataPoint.date);
+      const lastKnownDataPointDate = new Date(cachedData.country.r_value_7_days_date);
+
+      // Most recent datapoint from report is already cached.
+      if (
+        DateUtils.isBefore(lastKnownDataPointDate.getTime(), mostRecentDataPointDate.getTime()) ||
+        DateUtils.isSameDay(lastKnownDataPointDate.getTime(), mostRecentDataPointDate.getTime())
+      ) {
+        Logger.info(`${this.getId()} No new data for R-Value available yet.`);
+        return;
+      }
+
+      const rValueTrend = Helpers.computeTrend(validRvalues.map((dataPoint) => dataPoint.rValue).reverse());
 
       // Validation
-      if (!this.isDataValid(cachedData, rValue, rValueTrend, dataCheckResult)) {
+      if (!this.isDataValid(cachedData, mostRecentDataPoint.rValue, rValueTrend, mostRecentDataPointDate.getTime())) {
         throw new Error("[COVID] R-Value Plausi-Check failed");
       }
       const updatedData = Helpers.copyDeep(cachedData);
-      updatedData.country.r_value_7_days = rValue;
+      updatedData.country.r_value_7_days = mostRecentDataPoint.rValue;
+      updatedData.country.r_value_7_days_date = mostRecentDataPoint.date;
       updatedData.country.r_value_7_days_trend = rValueTrend;
-      updatedData.country.r_value_7_days_last_updated = dataCheckResult.lastModified;
+      updatedData.country.r_value_7_days_last_updated = mostRecentDataPointDate.getTime();
       updatedData.country.r_value_7_days_fetched_timestamp = fetchedTimestamp;
 
       return updatedData;
     } catch (err) {
       Logger.error(`${this.getId()} Could not update R-Values`);
-      Logger.error(`${this.getId()} ${err}`)
+      Logger.error(`${this.getId()} ${err}`);
       return;
     }
   }
@@ -86,11 +110,18 @@ export class RValueConnector extends Connector {
    * @param rValueTrend The calculated trend for the R-value.
    * @param dataCheckResult Information about the freshness check of the retrieved RKI data.
    */
-  private isDataValid(cachedData: CoronaData, rValue: number, rValueTrend: PredictedTrend, dataCheckResult: HeadRequestResult): boolean {
-    return rValue >= 0 &&
-    !!rValueTrend &&
-    dataCheckResult.lastModified >= 0 &&
-    dataCheckResult.lastModified > (cachedData.country.r_value_7_days_last_updated || 0)
+  private isDataValid(
+    cachedData: CoronaData,
+    rValue: number,
+    rValueTrend: PredictedTrend,
+    rValueTimestamp: number
+  ): boolean {
+    return (
+      rValue >= 0 &&
+      !!rValueTrend &&
+      rValueTimestamp >= 0 &&
+      rValueTimestamp > (cachedData.country.r_value_7_days_last_updated || 0)
+    );
   }
 
   /**
@@ -100,60 +131,35 @@ export class RValueConnector extends Connector {
    * If the column does not exist or the R-values are invalid, an error is thrown.
    * @param rows The data rows of the XLSX file from the RKI API.
    */
-  private findValidRValues(rows: any[][]): number[] {
+  private findValidRValues(rows: RkiRValueReportDay[]): RValueDataPoint[] {
     if (!rows || !rows.length) {
-      throw new Error("XLSX read error / no rows detected");
+      throw new Error("CSV read error / no rows detected");
     }
 
-    let headerRowIndex: number;
-    let rValueColumnIndex: number;
+    let validRValues: RValueDataPoint[] = [];
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-
-      if (!row || !row.length) {
-        continue;
-      }
-
-      for (const colName of this.R_VALUE_HEADER_COLUMN_NAMES) {
-        const index = row.indexOf(colName);
-
-        if (index !== -1) {
-          headerRowIndex = i;
-          rValueColumnIndex = index;
-          break;
-        }
-      }
-
-      if (typeof headerRowIndex !== "undefined" && typeof rValueColumnIndex !== "undefined") {
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (validRValues.length >= 7) {
         break;
       }
-    }
-    const rValues = rows.slice(-7).map((row: string[]) => row[rValueColumnIndex]);
+      const rValueRow = rows[i];
 
-    if (!rValues || !rValues.length) {
-      throw new Error("No R-values found");
-    }
-    const validRvalues: number[] = rValues.map(rValueString => {
-      try {
-
-        if (typeof rValueString === "string") {
-          return parseFloat(rValueString.replace(/,/g, "."));
-        } else if (typeof rValueString === "number") {
-          return rValueString;
-        } else {
-          return undefined;
-        }
-      } catch {
-        return undefined;
+      if (!rValueRow.PS_7_Tage_R_Wert || !this.isRValueValid(parseFloat(rValueRow.PS_7_Tage_R_Wert))) {
+        continue;
       }
-    }).filter((rValue: number) => {
-      return rValue !== null && !isNaN(rValue) && isFinite(rValue) && rValue >= 0;
-    });
+      validRValues.push({
+        date: rValueRow.Datum,
+        rValue: parseFloat(rValueRow.PS_7_Tage_R_Wert),
+      });
+    }
 
-    if (!validRvalues || !validRvalues.length) {
+    if (validRValues.length <= 0) {
       throw new Error("No valid R-values found");
     }
-    return validRvalues;
+    return validRValues;
+  }
+
+  private isRValueValid(rValue: number): boolean {
+    return rValue !== null && !isNaN(rValue) && isFinite(rValue) && rValue >= 0;
   }
 }
