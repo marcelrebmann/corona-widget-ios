@@ -1,7 +1,7 @@
-import { RkiResponse, PredictedTrend, CoronaData } from "./../interfaces/data.interfaces";
+import { RkiResponse, PredictedTrend, CoronaData } from "./../interfaces/data.interfaces.js";
 import fs from "fs";
 import axios from "axios";
-const SimpleLinearRegression = require("ml-regression-simple-linear");
+import SimpleLinearRegression from "ml-regression-simple-linear";
 
 export interface HeadRequestResult {
   isMoreRecentDataAvailable: boolean,
@@ -45,6 +45,17 @@ export class Helpers {
         return res();
       })
     });
+  }
+
+  static readFile(filePath: string): Promise<string> {
+    return new Promise<string>((res, rej) => {
+      fs.readFile(filePath, 'utf-8', (err, data: string) => {
+        if (err) {
+          return rej();
+        }
+        return res(data);
+      })
+    })
   }
 
   /**

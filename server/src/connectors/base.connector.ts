@@ -1,4 +1,4 @@
-import { CoronaData } from "./../interfaces/data.interfaces";
+import { CoronaData } from "./../interfaces/data.interfaces.js";
 
 /**
  * Specifies the connector execution frequency.

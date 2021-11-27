@@ -21,10 +21,10 @@ jobs:
         id: get_version
         run: echo ::set-output name=VERSION::$(echo $GITHUB_REF | cut -d / -f 3)
 
-      - name: Setup NodeJS 12
+      - name: Setup NodeJS 14
         uses: actions/setup-node@v1
         with: 
-          node-version: 12
+          node-version: 14
 
       - name: Install dependencies
         run: npm install

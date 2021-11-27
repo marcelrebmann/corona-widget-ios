@@ -1,47 +1,46 @@
-import { DateUtils } from './../utils/date.utils';
-import { Helpers } from '../utils/helpers';
-import { VaccinationData, CoronaData } from './../interfaces/data.interfaces';
-import { Connector, ConnectorUpdateType } from './base.connector';
-import path from "path";
-import Logger from "../services/logger.service";
-import { XlsxService } from "../services/xlsx.service";
+import { RkiVaccinationReportBundesland } from "./../interfaces/vaccination.interfaces.js";
+import { CsvService } from "./../services/csv.service.js";
+import { DateUtils } from "./../utils/date.utils.js";
+import { Helpers } from "../utils/helpers.js";
+import { VaccinationData, CoronaData } from "./../interfaces/data.interfaces.js";
+import { Connector, ConnectorUpdateType } from "./base.connector.js";
+import path, { dirname } from "path";
+import Logger from "../services/logger.service.js";
+import { fileURLToPath } from "url";
+import { States } from "../shared/states.js";
 
-interface VaccinationDataColumnIndexes {
-  bundeslandIdColumnIndex: number;
-  bundeslandNameColumnIndex: number;
-  vaccinationsCumulatedColumnIndex: number;
-  vaccinationQuoteIndex: number;
-}
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Updates the vaccination data based on the official published RKI XLSX report file.
  */
 export class VaccinationConnector extends Connector {
+  private readonly VACCINATION_QUOTES_REPORT_ARCHIVE_URL =
+    "https://raw.githubusercontent.com/robert-koch-institut/COVID-19-Impfungen_in_Deutschland/master/Archiv/";
+  private readonly VACCINATION_QUOTES_MOST_RECENT_REPORT_CSV_URL =
+    "https://raw.githubusercontent.com/robert-koch-institut/COVID-19-Impfungen_in_Deutschland/master/Aktuell_Deutschland_Impfquoten_COVID-19.csv";
+  private readonly VACCINATION_DATA_FILE_PATH = path.join(__dirname, "./../../data/");
+  private readonly VACCINATION_REPORT_FILENAME = "vaccination_report.csv";
 
-  private readonly VACCINATION_API = "https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Daten/Impfquotenmonitoring.xlsx?__blob=publicationFile";
-  private readonly VACCINATION_DATA_XLSX_FILE_PATH = path.join(__dirname, "./../../data/vaccination.xlsx");
-  private readonly VACCINATION_XLSX_SHEET_REGEX = /Impfquote.*bis/i;
-  private readonly VACCINATIONS_PER_DAY_DE_XLSX_SHEET_REGEX = /Impfungen.{1}pro.*Tag/i;
-
-  private readonly STATE_LIST: { [key: number]: string } = {
-    1: "Schleswig-Holstein",
-    2: "Hamburg",
-    3: "Niedersachsen",
-    4: "Bremen",
-    5: "Nordrhein-Westfalen",
-    6: "Hessen",
-    7: "Rheinland-Pfalz",
-    8: "Baden-Württemberg",
-    9: "Bayern",
-    10: "Saarland",
-    11: "Berlin",
-    12: "Brandenburg",
-    13: "Mecklenburg-Vorpommern",
-    14: "Sachsen",
-    15: "Sachsen-Anhalt",
-    16: "Thüringen"
-  }
-  private readonly STATE_NAMES = Object.values(this.STATE_LIST);
+  // private readonly STATE_LIST: { [key: number]: string } = {
+  //   1: "Schleswig-Holstein",
+  //   2: "Hamburg",
+  //   3: "Niedersachsen",
+  //   4: "Bremen",
+  //   5: "Nordrhein-Westfalen",
+  //   6: "Hessen",
+  //   7: "Rheinland-Pfalz",
+  //   8: "Baden-Württemberg",
+  //   9: "Bayern",
+  //   10: "Saarland",
+  //   11: "Berlin",
+  //   12: "Brandenburg",
+  //   13: "Mecklenburg-Vorpommern",
+  //   14: "Sachsen",
+  //   15: "Sachsen-Anhalt",
+  //   16: "Thüringen",
+  // };
+  // private readonly STATE_NAMES = Object.values(this.STATE_LIST);
 
   constructor() {
     super("[VACC]", ConnectorUpdateType.FREQUENT);
@@ -56,7 +55,6 @@ export class VaccinationConnector extends Connector {
    * @param cachedData The current cached data.
    */
   async update(cachedData: CoronaData): Promise<any> {
-
     if (!cachedData) {
       Logger.info(`${this.getId()} Postponing update until cached data exists.`);
       return;
@@ -67,45 +65,83 @@ export class VaccinationConnector extends Connector {
     }
 
     try {
-      const cachedDataTimestamp = cachedData.vaccination ? (cachedData.vaccination.last_updated || 0) : 0;
-      const updateCheckResult = await Helpers.isNewDataAvailable(this.VACCINATION_API, cachedDataTimestamp);
+      const cachedDataTimestamp = cachedData.vaccination ? cachedData.vaccination.last_updated || 0 : 0;
+      const lastUpdatedDate = new Date(cachedDataTimestamp);
+      const todayDate = new Date(Date.now());
 
-      if (!updateCheckResult.isMoreRecentDataAvailable) {
-        Logger.info(`${this.getId()} No new vaccination data found.`)
+      const isBeforeNextPlannedRefresh = DateUtils.isBefore(
+        DateUtils.getTomorrow(lastUpdatedDate).getTime(),
+        todayDate.getTime()
+      );
+
+      // No refresh needed yet. Cached data is actual.
+      if (isBeforeNextPlannedRefresh) {
+        Logger.info(`${this.getId()} No new vaccination data found.`);
         return;
       }
-      const xlsxFilePath = await XlsxService.downloadXlsx(this.VACCINATION_API, this.VACCINATION_DATA_XLSX_FILE_PATH);
 
-      if (!xlsxFilePath) {
-        throw new Error("XLSX download error");
+      const rows: RkiVaccinationReportBundesland[] = await CsvService.downloadAndReadCsv(
+        this.VACCINATION_QUOTES_MOST_RECENT_REPORT_CSV_URL,
+        `${this.VACCINATION_DATA_FILE_PATH}${this.VACCINATION_REPORT_FILENAME}`
+      );
+      let fetchedTimestamp = Date.now();
+      let reportDate = new Date(rows[0].Datum);
+
+      // const isCachedDataInitial = !cachedDataTimestamp;
+      const isLoadedReportMoreRecent = DateUtils.isBefore(
+        reportDate.getTime(),
+        cachedDataTimestamp
+      ) && !DateUtils.isSameDay(cachedDataTimestamp, reportDate.getTime());
+
+      if (!isLoadedReportMoreRecent) {
+        const cachedDataDate = DateUtils.formatToReportDate(new Date(cachedDataTimestamp));
+        Logger.info(
+          `${this.getId()} Most recent rki report [${rows[0].Datum}] equals the cached one [${cachedDataDate}]`
+        );
+        return;
       }
-      const fetchedTimestamp = Date.now();
-      const rows = await XlsxService.readXlsx(xlsxFilePath, this.VACCINATION_XLSX_SHEET_REGEX);
+      // if (
+      // 	!isCachedDataInitial &&
+      // 	!isMostRecentPublishedReportTheDayAfterCached
+      // ) {
+      // 	const cachedDataDate = DateUtils.formatToReportDate(
+      // 		new Date(cachedDataTimestamp)
+      // 	);
+      // 	Logger.info(
+      // 		`${this.getId()} Most recent report [${
+      // 			rows[0].Datum
+      // 		}] is not the day after cached one [${cachedDataDate}]`
+      // 	);
 
-      const vaccinationsDePerDayRows = await XlsxService.readXlsx(xlsxFilePath, this.VACCINATIONS_PER_DAY_DE_XLSX_SHEET_REGEX)
+      // 	// Try loading the report from archive
+      // 	const dayAfterCached = DateUtils.getTomorrow(
+      // 		new Date(cachedDataTimestamp)
+      // 	);
+      // 	Logger.info(
+      // 		`${this.getId()} Try loading report from archive for [${dayAfterCached}]`
+      // 	);
+      // 	rows = await this.loadNewReportFile(
+      // 		this.buildUrlToArchivedReport(dayAfterCached)
+      // 	);
+      // 	fetchedTimestamp = Date.now();
+      // 	reportDate = new Date(rows[0].Datum);
+      // }
+
+      // console.log("ROWS", rows);
 
       if (!rows || !rows.length) {
-        throw new Error("XLSX read error / no rows detected");
+        throw new Error("CSV read error / no rows detected");
       }
 
-      if (!vaccinationsDePerDayRows || !vaccinationsDePerDayRows.length) {
-        throw new Error("XLSX read error / no vacc de rows detected");
-      }
-      const columnIndexes = this.findColumnIndexes(rows);
-
-      if (!this.areColumnIndexesValid(columnIndexes)) {
-        throw new Error("Could not find all column indexes");
-      }
-
-      const vaccinationData = this.constructNewData(rows, vaccinationsDePerDayRows, updateCheckResult.lastModified, fetchedTimestamp, columnIndexes, cachedData);
+      const vaccinationData = this.constructNewData(rows, reportDate.getTime(), fetchedTimestamp, cachedData);
 
       // Validation
       if (!this.isStateDataValid(vaccinationData)) {
-        throw new Error("State data Plausi-Check failed")
+        throw new Error("State data Plausi-Check failed");
       }
 
       if (!this.isCountryDataValid(vaccinationData, cachedData)) {
-        throw new Error("Country data Plausi-Check failed")
+        throw new Error("Country data Plausi-Check failed");
       }
       const updatedData = Helpers.copyDeep(cachedData);
       updatedData.vaccination = vaccinationData;
@@ -116,6 +152,14 @@ export class VaccinationConnector extends Connector {
       Logger.error(`${this.getId()} ${err}`);
       return;
     }
+  }
+
+  private generateVaccinationQuotesReportName(date: Date): string {
+    return `${DateUtils.formatToReportDate(date)}_Deutschland_Impfquoten_COVID-19.csv`;
+  }
+
+  private buildUrlToArchivedReport(date: Date) {
+    return `${this.VACCINATION_QUOTES_REPORT_ARCHIVE_URL}${this.generateVaccinationQuotesReportName(date)}`;
   }
 
   /**
@@ -130,13 +174,15 @@ export class VaccinationConnector extends Connector {
         vacc_cumulated: null,
         vacc_delta: null,
         vacc_per_1000: null,
-        vacc_quote: null
+        vacc_quote: null,
+        vacc_quote_fully_vaccinated: null,
+        vacc_quote_booster: null,
       },
       last_updated: lastUpdated,
-      fetched_timestamp: fetched
+      fetched_timestamp: fetched,
     };
 
-    this.STATE_NAMES.map((state, index) => {
+    States.STATE_NAMES.map((state, index) => {
       const stateId: number = index + 1;
       template.states[stateId] = {
         name: state,
@@ -144,8 +190,10 @@ export class VaccinationConnector extends Connector {
         vacc_cumulated: null,
         vacc_delta: null,
         vacc_per_1000: null,
-        vacc_quote: null
-      }
+        vacc_quote: null,
+        vacc_quote_fully_vaccinated: null,
+        vacc_quote_booster: null,
+      };
     });
 
     return template;
@@ -159,37 +207,48 @@ export class VaccinationConnector extends Connector {
    * @param fetchedTimestamp The timestamp representing the time the XLSX data was fetched from RKI.
    * @param columnIndexes The set of column indexes used to find the corresponding values in the data rows.
    */
-  private constructNewData(rows: any[][], vaccsPerDayDeRows: any[][], dataTimestamp: number, fetchedTimestamp: number, columnIndexes: VaccinationDataColumnIndexes, cachedData: CoronaData): VaccinationData {
+  private constructNewData(
+    rows: RkiVaccinationReportBundesland[],
+    dataTimestamp: number,
+    fetchedTimestamp: number,
+    cachedData: CoronaData
+  ): VaccinationData {
     const vaccinationData = this.generateDataTemplate(dataTimestamp, fetchedTimestamp);
     const isSameDayAsCachedData = DateUtils.isSameDay(dataTimestamp, cachedData.vaccination.last_updated);
 
     for (const row of rows) {
-      const isRowValid = row.length > 2;
+      const isRowValid = row.Bundesland && row.BundeslandId_Impfort && !isNaN(parseInt(row.BundeslandId_Impfort));
 
       if (!isRowValid) {
         continue;
       }
-      const stateNameCandidate = row[columnIndexes.bundeslandNameColumnIndex] || "";
-      const isStateRow = isRowValid && this.STATE_NAMES.map(stateName => !!stateNameCandidate.match(stateName)).filter(match => !!match).length >= 1;
-      const isSummaryRow = isRowValid && row[columnIndexes.bundeslandNameColumnIndex] === "Gesamt";
+      const stateNameCandidate = row.Bundesland;
+      const stateId = parseInt(row.BundeslandId_Impfort);
+      const isSummaryRow = stateNameCandidate === "Deutschland" && stateId === 0;
+      const isStateRow =
+        isRowValid && !isSummaryRow && States.STATE_NAMES.includes(stateNameCandidate) && States.STATE_NAMES[stateId - 1] === stateNameCandidate;
 
       if (isStateRow) {
-        const stateId = parseInt(row[columnIndexes.bundeslandIdColumnIndex]);
-        const stateName = this.STATE_LIST[stateId] || row[columnIndexes.bundeslandNameColumnIndex];
-        const vacc_cumulated = row[columnIndexes.vaccinationsCumulatedColumnIndex] || 0;
-        const doesHistoricVaccinationDataExist = !!cachedData
-          && !!cachedData.vaccination
-          && !!cachedData.vaccination.states
-          && !!cachedData.vaccination.states[stateId];
+        const stateName = States.STATE_LIST[stateId];
+        const vacc_cumulated = parseFloat(row.Impfungen_gesamt_min1) || 0;
+        const doesHistoricVaccinationDataExist =
+          !!cachedData &&
+          !!cachedData.vaccination &&
+          !!cachedData.vaccination.states &&
+          !!cachedData.vaccination.states[stateId];
 
-        let vaccCumulatedPreviousDay = doesHistoricVaccinationDataExist ? (cachedData.vaccination.states[stateId].vacc_cumulated || 0) : 0;
+        let vaccCumulatedPreviousDay = doesHistoricVaccinationDataExist
+          ? cachedData.vaccination.states[stateId].vacc_cumulated || 0
+          : 0;
 
         // If data is from the same day, calculate the cumulated vaccinations by subtracting the latest increase.
         if (isSameDayAsCachedData) {
-          vaccCumulatedPreviousDay = vaccCumulatedPreviousDay - (cachedData.vaccination.states[stateId].vacc_delta || 0);
+          vaccCumulatedPreviousDay =
+            vaccCumulatedPreviousDay - (cachedData.vaccination.states[stateId].vacc_delta || 0);
         }
-        const vacc_delta = Math.max(vacc_cumulated - vaccCumulatedPreviousDay, 0);
-        const vacc_quote = row[columnIndexes.vaccinationQuoteIndex] || 0;
+        const vacc_quote = parseFloat(row.Impfquote_gesamt_min1) || 0;
+        const vacc_quote_fully_vaccinated = parseFloat(row.Impfquote_gesamt_voll) || 0;
+        const vacc_quote_booster = parseFloat(row.Impfquote_gesamt_boost) || 0;
 
         const stateExists = !!vaccinationData.states[stateId] && vaccinationData.states[stateId].name === stateName;
 
@@ -197,116 +256,24 @@ export class VaccinationConnector extends Connector {
           continue;
         }
         vaccinationData.states[stateId].vacc_cumulated = vacc_cumulated;
-        vaccinationData.states[stateId].vacc_delta = vacc_delta;
+        vaccinationData.states[stateId].vacc_delta = null;
         vaccinationData.states[stateId].vacc_quote = vacc_quote;
+        vaccinationData.states[stateId].vacc_quote_fully_vaccinated = vacc_quote_fully_vaccinated;
+        vaccinationData.states[stateId].vacc_quote_booster = vacc_quote_booster;
         vaccinationData.states[stateId].vacc_per_1000 = vacc_quote * 10;
       }
 
       if (isSummaryRow) {
-        vaccinationData.country.vacc_cumulated = row[columnIndexes.vaccinationsCumulatedColumnIndex] || 0;
+        vaccinationData.country.vacc_cumulated = parseFloat(row.Impfungen_gesamt_min1) || 0;
 
-        // const doesHistoricCountryVaccinationDataExist = cachedData
-        //   && cachedData.vaccination
-        //   && cachedData.vaccination.country;
-
-        // let vaccCumulatedPreviousDay = doesHistoricCountryVaccinationDataExist ? (cachedData.vaccination.country.vacc_cumulated || 0) : 0;
-
-        // If data is from the same day, calculate the cumulated vaccinations by subtracting the latest increase.
-        // if (isSameDayAsCachedData) {
-        //   vaccCumulatedPreviousDay = vaccCumulatedPreviousDay - (cachedData.vaccination.country.vacc_delta || 0);
-        // }
-        // vaccinationData.country.vacc_delta = Math.max(vaccinationData.country.vacc_cumulated - vaccCumulatedPreviousDay, 0);
-        vaccinationData.country.vacc_delta = this.getVaccinationDeltaDe(vaccsPerDayDeRows);
-        vaccinationData.country.vacc_quote = row[columnIndexes.vaccinationQuoteIndex] || 0;
+        vaccinationData.country.vacc_delta = null;
+        vaccinationData.country.vacc_quote = parseFloat(row.Impfquote_gesamt_min1) || 0;
+        vaccinationData.country.vacc_quote_fully_vaccinated = parseFloat(row.Impfquote_gesamt_voll) || 0;
+        vaccinationData.country.vacc_quote_booster = parseFloat(row.Impfquote_gesamt_boost) || 0;
         vaccinationData.country.vacc_per_1000 = vaccinationData.country.vacc_quote * 10;
       }
     }
     return vaccinationData;
-  }
-
-  /**
-   * Get the latest amount of first-time vaccinations in germany.
-   * @param rows 
-   * @returns 
-   */
-  private getVaccinationDeltaDe(rows: any[][]): number {
-    let maxDate: Date = null;
-    let dataRowIndex = -1;
-    rows.map((row, index) => {
-      const dateField = row ? row[0] : null;
-        if (!dateField || !dateField.getMonth) {
-          // Invalid row / no date.
-            return;
-        }
-        // Row has more recent date -> update
-        if (!maxDate || dateField.getTime() > maxDate) {
-            maxDate = dateField.getTime();
-            dataRowIndex = index;
-        }
-    });
-
-    if (!maxDate) {
-        return 0;
-    }
-    // New first-time vaccinations.
-    return rows[dataRowIndex][1];
-}
-
-  /**
-   * Find the column indexes within the XLSX data for vaccination data.
-   * Tries to identify the header row/s in the data that contains column header names.
-   * Then the indices of the vaccination related columns are searched by matching names.
-   * If a specific column header was not found, it is undefined.
-   * @param rows The data rows of a XSLX file.
-   */
-  private findColumnIndexes(rows: any[][]): VaccinationDataColumnIndexes {
-    const columnIndexes: VaccinationDataColumnIndexes = {
-      bundeslandIdColumnIndex: undefined,
-      bundeslandNameColumnIndex: undefined,
-      vaccinationsCumulatedColumnIndex: undefined,
-      vaccinationQuoteIndex: undefined
-    };
-
-    for (const headerCandidate of rows) {
-      const bundeslandIdColumnIndexCandidate = headerCandidate.indexOf("RS");
-      const bundeslandNameColumnIndexCandidate = headerCandidate.indexOf("Bundesland");
-      let vaccinationsCumulatedColumnIndexCandidate = headerCandidate.indexOf("Gesamtzahl bisher verabreichter Impfungen");
-      
-      if (vaccinationsCumulatedColumnIndexCandidate === -1) {
-        vaccinationsCumulatedColumnIndexCandidate = headerCandidate.indexOf("Gesamtzahl bisher verabreichter Impfungen")
-      }
-      const vaccinationQuoteColumnIndexCandidate = headerCandidate.indexOf("Gesamt");
-
-      if (bundeslandIdColumnIndexCandidate >= 0 && typeof columnIndexes.bundeslandIdColumnIndex !== "number") {
-        columnIndexes.bundeslandIdColumnIndex = bundeslandIdColumnIndexCandidate;
-      }
-      if (bundeslandNameColumnIndexCandidate >= 0 && typeof columnIndexes.bundeslandNameColumnIndex !== "number") {
-        columnIndexes.bundeslandNameColumnIndex = bundeslandNameColumnIndexCandidate;
-      }
-      if (vaccinationsCumulatedColumnIndexCandidate >= 0 && typeof columnIndexes.vaccinationsCumulatedColumnIndex !== "number") {
-        columnIndexes.vaccinationsCumulatedColumnIndex = vaccinationsCumulatedColumnIndexCandidate;
-      }
-      if (vaccinationQuoteColumnIndexCandidate >= 0 && typeof columnIndexes.vaccinationQuoteIndex !== "number") {
-        columnIndexes.vaccinationQuoteIndex = vaccinationQuoteColumnIndexCandidate;
-      }
-
-      if (this.areColumnIndexesValid(columnIndexes)) {
-        break;
-      }
-    }
-    return columnIndexes;
-  }
-
-  /**
-   * Checks and returns if a set of column indexes is valid.
-   * @param columnIndexes The column indexes to validate.
-   */
-  private areColumnIndexesValid(columnIndexes: VaccinationDataColumnIndexes): boolean {
-    return !!columnIndexes
-      && columnIndexes.bundeslandIdColumnIndex >= 0
-      && columnIndexes.bundeslandNameColumnIndex >= 0
-      && columnIndexes.vaccinationsCumulatedColumnIndex >= 0
-      && columnIndexes.vaccinationQuoteIndex >= 0;
   }
 
   /**
@@ -317,16 +284,16 @@ export class VaccinationConnector extends Connector {
     const blIds = Object.keys(vaccinationData.states);
     return blIds.every((id) => {
       const state = vaccinationData.states[`${id}`];
-      const isStateValid = !!state
-        && !!state.name
-        && !!state.BL_ID
-        && state.vacc_cumulated >= 0
-        && state.vacc_delta >= 0
-        && state.vacc_per_1000 >= 0
-        && state.vacc_quote >= 0;
+      const isStateValid =
+        !!state &&
+        !!state.name &&
+        !!state.BL_ID &&
+        state.vacc_cumulated >= 0 &&
+        state.vacc_per_1000 >= 0 &&
+        state.vacc_quote >= 0;
 
       if (!isStateValid) {
-        Logger.error(`${this.getId()} Plausi-Check failed! BL_ID: ${state.BL_ID}, Name: ${state.name}`)
+        Logger.error(`${this.getId()} Plausi-Check failed! BL_ID: ${state.BL_ID}, Name: ${state.name}`);
       }
       return isStateValid;
     });
@@ -338,15 +305,27 @@ export class VaccinationConnector extends Connector {
    * @param cachedData The cached data.
    */
   private isCountryDataValid(vaccinationData: VaccinationData, cachedData: CoronaData): boolean {
-    return vaccinationData.country
-      && vaccinationData.country.vacc_cumulated >= 0
-      // && vaccinationData.country.vacc_cumulated >= 0
-      && vaccinationData.country.vacc_cumulated >= (cachedData?.vaccination?.country?.vacc_cumulated || 0)
-      && vaccinationData.country.vacc_delta >= 0
-      && vaccinationData.country.vacc_per_1000 >= 0
-      // && vaccinationData.country.vacc_per_1000 >= 0
-      // && vaccinationData.country.vacc_quote >= 0;
-      && vaccinationData.country.vacc_per_1000 >= (cachedData?.vaccination?.country?.vacc_per_1000 || 0)
-      && vaccinationData.country.vacc_quote >= (cachedData?.vaccination?.country?.vacc_quote || 0);
+    return (
+      vaccinationData.country &&
+      vaccinationData.country.vacc_cumulated >= 0 &&
+      vaccinationData.country.vacc_cumulated >= (cachedData?.vaccination?.country?.vacc_cumulated || 0) &&
+      vaccinationData.country.vacc_per_1000 >= 0 &&
+      vaccinationData.country.vacc_quote >= 0 &&
+      vaccinationData.country.vacc_per_1000 >= (cachedData?.vaccination?.country?.vacc_per_1000 || 0) &&
+      vaccinationData.country.vacc_quote >= (cachedData?.vaccination?.country?.vacc_quote || 0)
+    );
   }
+
+  // private async loadNewReportFile(downloadUrl: string): Promise<RkiVaccinationReportBundesland[]> {
+  //   const reportCsvFilepath = await CsvService.downloadCsv(
+  //     downloadUrl,
+  //     `${this.VACCINATION_DATA_FILE_PATH}${this.VACCINATION_REPORT_FILENAME}`
+  //   );
+  //   if (!reportCsvFilepath) {
+  //     throw new Error("CSV download error");
+  //   }
+  //   const data = await Helpers.readFile(reportCsvFilepath);
+  //   const rows: RkiVaccinationReportBundesland[] = await CsvService.parseCsv(data);
+  //   return rows;
+  // }
 }

@@ -26,12 +26,11 @@ Zur Nutzung des Widgets wird die kostenlose iOS-App [Scriptable](https://scripta
 ### **Inzidenz-Modus (Landkreis/Kreisstadt):**  
 * 7-Tages Inzidenz für Landkreis + Bundesland
 * Anstieg der absoluten Fallzahlen im Landkreis im Vergleich zum vorherigen Tag
-* Aktuelles stabiles Inzidenz-Level
+* Hospitalisierungs-Inzidenz + Ampelstufe
 * Info zur Aktualität der Daten (RKI)
 * Kennzeichnung Kreisfreier Städte (SK)
 * Der Landkreis-Name kann durch ein eigenes Label überschrieben werden
-* Impfquote für Bundesland und Anstieg der Impfungen im Vergleich zum Vortag
-* R-Wert für Bundesland (7-Tage-Schätzwert)
+* Impfquote für Bundesland (vollständig geimpft + Auffrischung erhalten)
 * Auto Light-/Darkmode
 
 <br/>
@@ -40,7 +39,8 @@ Zur Nutzung des Widgets wird die kostenlose iOS-App [Scriptable](https://scripta
 * Neuinfektionen des vorherigen Tages
 * Veränderung der gestrigen Neuinfektionen im Vergleich zum Vortag ("Gestern waren es X Neuinfektionen mehr, als vorgestern")
 * 7-Tage-Inzidenz für Deutschland + Trend
-* Impfquoten für Deutschland und Anstieg der Impfungen im Vergleich zum Vortag
+* Hospitalisierungs-Inzidenz + Ampelstufe
+* Impfquoten für Deutschland (vollständig geimpft + Auffrischung erhalten)
 * R-Wert für Deutschland (7-Tage-Schätzwert)
 * Auto Light-/Darkmode
 
@@ -54,10 +54,13 @@ Die Aktualität der bereitgestellten Daten kann aufgrund von Meldeverzögerungen
   https://npgeo-corona-npgeo-de.hub.arcgis.com/
 
 * Daten zu Impfquoten:  
-  https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Daten/Impfquoten-Tab.html
+  https://github.com/robert-koch-institut/COVID-19-Impfungen_in_Deutschland
 
 * Daten zum R-Wert:  
-  https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Projekte_RKI/Nowcasting.html
+  https://github.com/robert-koch-institut/SARS-CoV-2-Nowcasting_und_-R-Schaetzung
+
+* Daten zur Hospitalisierung:  
+  https://github.com/robert-koch-institut/COVID-19-Hospitalisierungen_in_Deutschland
 
 Diese Daten werden über ein von mir betriebenes Backend aufbereitet und für das Widget zur Verfügung gestellt.
 
@@ -101,7 +104,6 @@ Zur erweiterten Konfiguration können die gesetzten Werte in der `CONFIG`-Variab
 
 - `serverUrl`: Adresse, unter der die Serverkomponente erreichbar ist.  
 - `showTrendCurves`: Zeichnet Trendlinien in die Charts (experimentell)  
-- `showIncidenceStability`: Ob das Inzidenz-Stabilitätslevel des Kreises - angezeigt wird  
 - `debugMode`: Aktiviert detailliertere Logs zur Fehlerbehebung  
 - `fontScaleFactor`: Skaliert die Schriftgrößen um den angegebenen Faktor  
 - `fontSize`: Definiert die Schriftgrößen  
@@ -132,16 +134,13 @@ Zur erweiterten Konfiguration können die gesetzten Werte in der `CONFIG`-Variab
 
 <br/>
 
-## Inzidenz-Stabilität
-Die Stabilität der Inzidenz wird unter anderem genutzt, um die Maßnahmen/Folgen/Regeln für den Einzelhandel abzuleiten. Aktuell sind dazu vier Level definiert (unter 50; 50 - 100; 100 - 200; über 200).  
-Ein stabiles Inzidenzlevel liegt dann vor, wenn die Inzidenz in einem Landkreis drei Tage in Folge in einem der genannten Level liegt.
-
-| Stabile Inzidenz | Symbol | Aktuelle Bedeutung lt. Bundesregierung |
-| --- | --- | --- |
-| unter 50 | ![Level 1](./screenshots/stability_level_1.png) | i.d.R. Öffnung d. Einzelandel ohne Termin
-| 50 - 100 | ![Level 2](./screenshots/stability_level_2.png) | i.d.R. Öffnung d. Einzelhandels unter Auflagen (mit Termin, Click-and-meet, ...) |
-| 100 - 200 | ![Level 3](./screenshots/stability_level_3.png) | i.d.R. Einzelhandel geschlossen, nur Abholung/Lieferung möglich |
-| über 200 | ![Level 4](./screenshots/stability_level_4.png) | i.d.R. Hotspot-Regelungen |
+## Hospitalisierungs-Inzidenz
+| Inzidenzstufe | Farbe |
+| --- | --- |
+| < 3 | Grün |
+| >= 3 | Gelb |
+| >= 6 | Rot |
+| >= 9 | Magenta |
 
 <br/>
 
@@ -201,6 +200,13 @@ Bei Verbesserungsvorschlägen/Bugs/etc gerne einen PR stellen oder ein Issue öf
 <br/>
 
 # Changelog
+
+## Version 1.3.0
+- RKI GitHub-Repo als Datenquelle hinzugefügt
+- Hospitalisierungs-Inzidenz
+- Impfquoten für vollständig geimpft & Booster-Impfungen
+- Layout-Verbesserungen
+- Daten werden nun auch im Offline-Modus angezeigt (zuletzt bekannte Daten)
 
 ## Version 1.2.3
 - Minor fix for rki vaccination reports
