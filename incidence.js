@@ -12,9 +12,9 @@
  */
 
 const CONFIG = {
-  serverUrl: "https://dev.marcelrebmann.de/corona", // If self-hosted server is used, enter your server url here.
-  location_cache_filename: "corona_location_dev.txt", // Do not change
-  data_cache_filename: "corona_widget_data_dev.txt", // Do not change
+  serverUrl: "https://cdn.marcelrebmann.de/corona", // If self-hosted server is used, enter your server url here.
+  location_cache_filename: "corona_location.txt", // Do not change
+  data_cache_filename: "corona_widget_data.txt", // Do not change
   vaccination_image_filename: "vaccine-64.png", // Do not change
   showTrendCurves: false, // Show trend curves inside the bar charts. Experimental feature.
   debugMode: false, // Log debug statements to console.
