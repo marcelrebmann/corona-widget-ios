@@ -1,2 +1,6 @@
-#### 1.2.3 (2021-06-29)
-- Minor fix for rki vaccination reports
+#### 1.3.0 (2021-11-27)
+- Fehlgeschlagene Aktualisierung von Impfquoten und R-Wert behoben
+- Hospitalisierungs-Inzidenz hinzugefügt
+- Impfquoten für vollständig geimpft & Booster-Impfungen
+- Daten werden nun auch im Offline-Modus angezeigt (zuletzt bekannte Daten)
+- Layout-Anpassungen
