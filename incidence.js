@@ -17,7 +17,7 @@ const CONFIG = {
   data_cache_filename: "corona_widget_data_dev.txt", // Do not change
   vaccination_image_filename: "vaccine-64.png", // Do not change
   showTrendCurves: false, // Show trend curves inside the bar charts. Experimental feature.
-  debugMode: true, // Log debug statements to console.
+  debugMode: false, // Log debug statements to console.
   fontScaleFactor: 1, // Scales all the font sizes by a given factor.
   fontSize: {
     header: 12,
