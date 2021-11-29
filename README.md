@@ -1,6 +1,6 @@
 # **Corona Widget für iOS (Scriptable App)**
 
-Das Widget zeigt Daten zur Inzidenz, Neuinfektionen sowie Impfungen innerhalb Deutschlands an.
+Das Widget zeigt Daten zu Inzidenz, Neuinfektionen, Impfquoten sowie Hospitalisierungs-Inzidenzen innerhalb Deutschlands an.
 
 Zur einfacheren Organisation und Bereitstellung von Updates befindet sich das Widget-Skript jetzt in diesem Repository, statt wie bisher im GIST. ([Link zum meinem GIST](https://gist.github.com/marcelrebmann/64494e453deaf26cab3c14c9ff711e1e))
  
@@ -158,7 +158,7 @@ Die Konfigurationen mit fixem Ort sowie der Neuinfektionen-Modus werden bei eine
 
 # Self-Hosted Server (optional)
 Wer möchte, kann die Serverkomponente ebenfalls auf einem eigenen Server/Rechner betrieben, um die Daten des RKI für das Widget aufzubereiten.
-Zur Installation werden `Node.js` (Version >=12.x) und `npm` benötigt.
+Zur Installation werden `Node.js` (Version >=14.x) und `npm` benötigt.
 
 ### **Installation**
 
@@ -200,6 +200,9 @@ Bei Verbesserungsvorschlägen/Bugs/etc gerne einen PR stellen oder ein Issue öf
 <br/>
 
 # Changelog
+
+## Version 1.3.1
+- Behebt einen Fehler, bei dem das Impf-Image nicht korrekt geladen werden konnte. 
 
 ## Version 1.3.0
 - RKI GitHub-Repo als Datenquelle hinzugefügt

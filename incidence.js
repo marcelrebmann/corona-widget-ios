@@ -8,7 +8,7 @@
  * Author: https://github.com/marcelrebmann/
  * Source: https://github.com/marcelrebmann/corona-widget-ios
  *
- * Version: 1.3.0
+ * Version: 1.3.1
  */
 
 const CONFIG = {
@@ -217,6 +217,13 @@ class Cache {
    */
   static async loadVaccinationImage() {
     if (Cache.fileManager.fileExists(Cache.vaccinationImageFilePath)) {
+      if (!Cache.fileManager.isFileDownloaded(Cache.vaccinationImageFilePath)) {
+        try {
+          await Cache.fileManager.downloadFileFromiCloud(Cache.vaccinationImageFilePath);
+        } catch {
+          Logger.log("Vaccination image could not be downloaded from iCloud");
+        }
+      }
       return Cache.fileManager.readImage(Cache.vaccinationImageFilePath);
     }
     try {
@@ -226,7 +233,7 @@ class Cache {
       Logger.log("IMAGE WRITTEN");
       return image;
     } catch {
-      Logger.warn("Could not load vaccination image");
+      Logger.log("Could not load vaccination image");
       return;
     }
   }
@@ -746,8 +753,15 @@ class UiHelpers {
     const row = root.addStack();
     row.centerAlignContent();
 
-    const vaccPrefix = row.addImage(UiHelpers.getVaccinationImage());
-    vaccPrefix.imageSize = new Size(fontSize, fontSize);
+    const vaccImage = UiHelpers.getVaccinationImage();
+
+    if (vaccImage) {
+      const vaccPrefix = row.addImage(UiHelpers.getVaccinationImage());
+      vaccPrefix.imageSize = new Size(fontSize, fontSize);
+    } else {
+      const vaccIcon = row.addText("💉");
+      vaccIcon.font = Font.boldSystemFont(fontSize);
+    }
 
     if (label) {
       const headerLabel = row.addText(` ${label}`);
