@@ -1120,7 +1120,7 @@ const createInfectionsWidget = (widget, data) => {
     countryData.cases7_de_per_100k,
     countryData.cases7_de_per_100k_trend,
     `DE`,
-    CONFIG.fontSize.small,
+    CONFIG.fontSize.xsmall,
     true,
     false
   );
