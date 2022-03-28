@@ -8,7 +8,7 @@
  * Author: https://github.com/marcelrebmann/
  * Source: https://github.com/marcelrebmann/corona-widget-ios
  *
- * Version: 1.3.1
+ * Version: 1.4.0
  */
 
 const CONFIG = {
@@ -50,7 +50,6 @@ const WIDGET_MODE = {
 };
 const INCIDENCE_HEADER = `🦠 Inzidenz`;
 const INFECTIONS_HEADER = `🦠 Infektionen`;
-const WIDGET_SIZE_MEDIUM = "medium";
 
 const INCIDENCE_YELLOW = 35;
 const INCIDENCE_RED = 50;
@@ -102,13 +101,18 @@ const BUNDESLAENDER_SHORT = {
 const LOCALE_DE = "de_DE";
 const COMMA_SEPARATOR = Device.locale() === LOCALE_DE ? "," : ".";
 
+const WIDGET_SIZE_SMALL = "small";
+const WIDGET_SIZE_MEDIUM = "medium";
+const WIDGET_SIZE_LARGE = "large";
+const WIDGET_SIZE_EXTRA_LARGE = "extraLarge";
+
 /**
  * App specific state.
  * This is accessed at runtime.
  */
 const APP_STATE = {
-  widgetSize: "small",
-  isMediumSize: false,
+  widgetSize: WIDGET_SIZE_SMALL,
+  isGreaterOrEqualThanMedium: false,
   widgetMode: undefined,
 };
 
@@ -327,7 +331,7 @@ class Utils {
     vaccination_last_updated.setSeconds(0);
     relevantTimestamps.push(vaccination_last_updated.getTime());
 
-    if (APP_STATE.isMediumSize || APP_STATE.widgetMode === WIDGET_MODE.INFECTIONS) {
+    if (APP_STATE.isGreaterOrEqualThanMedium || APP_STATE.widgetMode === WIDGET_MODE.INFECTIONS) {
       const rValueLastUpdated = new Date(data.r_value_7_days_last_updated);
       rValueLastUpdated.setDate(rValueLastUpdated.getDate() + 1);
       rValueLastUpdated.setHours(0);
@@ -522,7 +526,7 @@ class UiHelpers {
     incidence,
     indicenceTrend,
     label,
-    fontSize = CONFIG.fontSize.small,
+    fontSize = CONFIG.fontSize.xsmall,
     showTrend = true,
     renderLabelAsSymbol = false
   ) {
@@ -548,8 +552,9 @@ class UiHelpers {
       trendIconLabel.textColor = UiHelpers.getTrendColor(predictedIncidenceSlope);
     }
 
+    const shouldBeShortened = Utils.isNumericValue(incidence) && incidence >= 1000;
     const incidenceLabel = row.addText(
-      Utils.isNumericValue(incidence) ? ` ${incidence.toFixed(1).replace(".", COMMA_SEPARATOR)}` : " -"
+      Utils.isNumericValue(incidence) ? ` ${incidence.toFixed(shouldBeShortened ? 0 : 1).replace(".", COMMA_SEPARATOR)}` : " -"
     );
     incidenceLabel.font = Font.boldSystemFont(fontSize);
     incidenceLabel.textColor = UiHelpers.getIncidenceColor(incidence);
@@ -846,10 +851,10 @@ class DataService {
       const data = await new Request(serverApi(1)).loadJSON();
       if (!data) {
         throw new Error("Could not load absolute data from server");
-      }      
+      }
       const cachedData = Cache.get(DataService.absoluteCasesCacheId);
       const isCacheUpdateNeeded = !cachedData || (data.rki_updated > cachedData.rki_updated);
-      
+
       if (isCacheUpdateNeeded) {
         Cache.update(DataService.absoluteCasesCacheId, data);
         Logger.log("Cache updated");
@@ -907,12 +912,11 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
   const headerStack = widget.addStack();
   headerStack.layoutHorizontally();
   headerStack.centerAlignContent();
-
   const header = headerStack.addText(INCIDENCE_HEADER);
   header.font = Font.mediumSystemFont(CONFIG.fontSize.header);
 
   if (isLocationFlexible) {
-    headerStack.addSpacer(APP_STATE.isMediumSize ? 10 : null);
+    headerStack.addSpacer(APP_STATE.isGreaterOrEqualThanMedium ? 10 : null);
     const icon = SFSymbol.named(isCached ? "bolt.horizontal.circle" : "location");
     const flexibleLocationIndicator = headerStack.addImage(icon.image);
     flexibleLocationIndicator.imageSize = new Size(CONFIG.fontSize.medium, CONFIG.fontSize.medium);
@@ -927,7 +931,7 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
   const stateInfo = widget.addText(UiHelpers.generateDataState(data));
   stateInfo.font = Font.systemFont(CONFIG.fontSize.tiny);
   stateInfo.textColor = COLOR_GREY;
-  widget.addSpacer(10);
+  widget.addSpacer();
 
   const content = widget.addStack();
   content.backgroundColor = COLOR_CONTAINER_BG;
@@ -946,7 +950,7 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
     Utils.isNumericValue(data.landkreis.cases7_per_100k) ? `${landkreisIncidence.replace(".", COMMA_SEPARATOR)}` : "-"
   );
   incidenceLabel.font = Font.boldSystemFont(CONFIG.fontSize.xlarge);
-  incidenceLabel.minimumScaleFactor = 0.8;
+  incidenceLabel.minimumScaleFactor = 0.6;
   incidenceLabel.textColor = UiHelpers.getIncidenceColor(data.landkreis.cases7_per_100k);
 
   const landkreisTrendIconLabel = incidenceRow.addText(
@@ -1004,7 +1008,7 @@ const createIncidenceWidget = (widget, data, customLandkreisName, isLocationFlex
     data.landkreis.cases7_bl_per_100k,
     data.landkreis.cases7_bl_per_100k_trend,
     `${BUNDESLAENDER_SHORT[data.landkreis.BL]}`,
-    CONFIG.fontSize.small,
+    CONFIG.fontSize.xsmall,
     true,
     false
   );
@@ -1064,7 +1068,7 @@ const createInfectionsWidget = (widget, data) => {
     `${Utils.isNumericValue(countryData.new_cases) ? countryData.new_cases.toLocaleString() : "-"}`
   );
   casesLabel.font = Font.boldSystemFont(CONFIG.fontSize.xlarge);
-  casesLabel.minimumScaleFactor = 0.8;
+  casesLabel.minimumScaleFactor = 0.5;
 
   casesStack.addSpacer();
 
@@ -1084,6 +1088,7 @@ const createInfectionsWidget = (widget, data) => {
       : "-"
   );
   casesDiffLabel.font = Font.mediumSystemFont(CONFIG.fontSize.medium);
+  casesDiffLabel.minimumScaleFactor = 0.8;
   casesDiffLabel.textColor = COLOR_GREY;
 
   casesDifferenceStack.addSpacer();
@@ -1115,7 +1120,7 @@ const createInfectionsWidget = (widget, data) => {
     countryData.cases7_de_per_100k,
     countryData.cases7_de_per_100k_trend,
     `DE`,
-    CONFIG.fontSize.small,
+    CONFIG.fontSize.xsmall,
     true,
     false
   );
@@ -1161,14 +1166,16 @@ Script.setWidget(widget);
 Script.complete();
 
 async function createWidget(size) {
-  APP_STATE.isMediumSize = size === WIDGET_SIZE_MEDIUM;
+  APP_STATE.isGreaterOrEqualThanMedium = (size === WIDGET_SIZE_MEDIUM || size === WIDGET_SIZE_LARGE || size === WIDGET_SIZE_EXTRA_LARGE);
   APP_STATE.widgetSize = size;
   APP_STATE.widgetMode = WIDGET_MODE.INCIDENCE;
 
-  let location = {};
-  let customLandkreisName;
+  // let location = {};
+  let locations = [];
+  let customLandkreisNames = [];
 
-  const params = args.widgetParameter ? args.widgetParameter.split(",") : undefined;
+  const params = args.widgetParameter ? args.widgetParameter.split(";") : undefined;
+  // const params = args.widgetParameter ? args.widgetParameter.split(",") : undefined;
   // const params = ["49.89", "10.855"] // BA
   // const params = ["48.6406978", "9.1391464"] // BB
   // const params = ["INF"];
@@ -1177,12 +1184,13 @@ async function createWidget(size) {
   widget.setPadding(12, 12, 12, 12);
 
   if (!params) {
-    location = await DataService.loadLocation();
+    const liveLocation = await DataService.loadLocation();
 
-    if (!location) {
+    if (!liveLocation) {
       widget.addText("Standort konnte nicht ermittelt werden.");
       return widget;
     }
+    locations.push(liveLocation);
   }
 
   if (params && params[0] === "INF") {
@@ -1190,79 +1198,145 @@ async function createWidget(size) {
   }
 
   if (params && params[0] !== "INF") {
-    location = {
-      latitude: parseFloat(params[0]),
-      longitude: parseFloat(params[1]),
-    };
-    customLandkreisName = params[2];
+    for (const param of params) {
+      const locationConfig = param.split(",");
+      locations.push({
+        latitude: parseFloat(locationConfig[0]),
+        longitude: parseFloat(locationConfig[1]),
+      })
+      customLandkreisNames.push(locationConfig[2]);
+    }
   }
   const isLocationFlexible = !params;
   UiHelpers.setVaccinationImage(await Cache.loadVaccinationImage());
 
-  if (APP_STATE.isMediumSize) {
-    if (APP_STATE.widgetMode === WIDGET_MODE.INFECTIONS) {
-      let infectionData;
-      try {
-        infectionData = await DataService.loadAbsoluteCases();
-      } catch {
-        Logger.log("INFECTIONS WIDGET (M): COULD NOT LOAD ABSOLUTE CASES");
-      }
-      createInfectionsWidget(widget, infectionData);
-      widget.refreshAfterDate = Utils.getNextUpdate(infectionData);
-      return widget;
-    }
+  const widgetLocation = locations[0];
 
+  switch (size) {
+    case WIDGET_SIZE_SMALL:
+      if (APP_STATE.widgetMode === WIDGET_MODE.INCIDENCE) {
+        let data = await loadIncidenceData(widgetLocation);
+        createIncidenceWidget(widget, data, customLandkreisNames[0], isLocationFlexible, widgetLocation.isCached);
+        widget.refreshAfterDate = Utils.getNextUpdate(data);
+      } else if (APP_STATE.widgetMode === WIDGET_MODE.INFECTIONS) {
+        let data = loadInfectionsData();
+        createInfectionsWidget(widget, data);
+        widget.refreshAfterDate = Utils.getNextUpdate(data);
+      } else {
+        widget.addText("Keine Daten.");
+      }
+      break;
+    case WIDGET_SIZE_LARGE:
+      if (APP_STATE.widgetMode === WIDGET_MODE.INCIDENCE) {
+        let data;
+
+        const rootStack = widget.addStack();
+        rootStack.layoutHorizontally();
+
+        const left = rootStack.addStack();
+        left.layoutVertically();
+        let activeStack = left;
+
+
+        for (let i = 0; i < locations.length; i++) {
+          if (i === 2) {
+            activeStack = rootStack.addStack();
+          }
+          const stack = activeStack.addStack();
+          stack.layoutVertically();
+          data = await loadIncidenceData(locations[i]);
+          createIncidenceWidget(stack, data, customLandkreisNames[i], isLocationFlexible, locations[i].isCached);
+
+        }
+        widget.refreshAfterDate = Utils.getNextUpdate(data);
+      } else if (APP_STATE.widgetMode === WIDGET_MODE.INFECTIONS) {
+        let data = loadInfectionsData();
+        createInfectionsWidget(widget, data);
+        widget.refreshAfterDate = Utils.getNextUpdate(data);
+      } else {
+        widget.addText("Keine Daten.");
+      }
+      break;
+    case WIDGET_SIZE_MEDIUM:
+      if (APP_STATE.widgetMode === WIDGET_MODE.INFECTIONS) {
+        let data = await loadInfectionsData();
+        createInfectionsWidget(widget, data);
+        widget.refreshAfterDate = Utils.getNextUpdate(data);
+      } else if (APP_STATE.widgetMode === WIDGET_MODE.INCIDENCE) {
+        const main = widget.addStack();
+        const leftSide = main.addStack();
+        leftSide.layoutVertically();
+
+        let data = await loadIncidenceData(widgetLocation);
+        createIncidenceWidget(leftSide, data, customLandkreisNames[0], isLocationFlexible, widgetLocation.isCached);
+        main.addSpacer();
+        main.addSpacer(34);
+        main.addSpacer();
+        const rightSide = main.addStack();
+        rightSide.layoutVertically();
+
+        if (!data) {
+          data = await loadInfectionsData();
+        }
+        createInfectionsWidget(rightSide, data);
+        widget.refreshAfterDate = Utils.getNextUpdate(data);
+      } else {
+        widget.addText("Keine Daten.");
+      }
+      break;
+    case WIDGET_SIZE_EXTRA_LARGE:
+      if (APP_STATE.widgetMode === WIDGET_MODE.INFECTIONS) {
+        let data = await loadInfectionsData();
+        createInfectionsWidget(widget, data);
+        widget.refreshAfterDate = Utils.getNextUpdate(data);
+      } else if (APP_STATE.widgetMode === WIDGET_MODE.INCIDENCE) {
+        const main = widget.addStack();
+        const leftSide = main.addStack();
+        leftSide.layoutVertically();
+
+        let data;
+
+        for (let i = 0; i < locations.length; i++) {
+          data = await loadIncidenceData(locations[i]);
+          createIncidenceWidget(leftSide, data, customLandkreisNames[i], isLocationFlexible, locations[i].isCached);
+        }
+        main.addSpacer();
+        main.addSpacer(34);
+        main.addSpacer();
+        const rightSide = main.addStack();
+        rightSide.layoutVertically();
+
+        if (!data) {
+          data = await loadInfectionsData();
+        }
+        createInfectionsWidget(rightSide, data);
+        widget.refreshAfterDate = Utils.getNextUpdate(data);
+      } else {
+        widget.addText("Keine Daten.");
+      }
+      break;
+    default:
+      widget.addText("Widget-Kontext nicht gefunden.");
+  }
+  return widget;
+
+  async function loadIncidenceData(location) {
     let data;
     try {
       data = await DataService.loadData(location);
     } catch {
-      Logger.log("COMBINED WIDGET (M): COULD NOT LOAD STATE DATA");
+      Logger.log("INCIDENCE WIDGET (S): COULD NOT LOAD DATA");
     }
-    const main = widget.addStack();
-    const leftSide = main.addStack();
-    leftSide.layoutVertically();
-    createIncidenceWidget(leftSide, data, customLandkreisName, isLocationFlexible, location.isCached);
-    main.addSpacer();
-    main.addSpacer(34);
-    main.addSpacer();
-    const rightSide = main.addStack();
-    rightSide.layoutVertically();
-
-    if (!data) {
-      try {
-        data = await DataService.loadAbsoluteCases();
-      } catch {
-        Logger.log("COMBINED WIDGET (M): COULD NOT LOAD ABSOLUTE CASES");
-      }
-    }
-    createInfectionsWidget(rightSide, data);
-    widget.refreshAfterDate = Utils.getNextUpdate(data);
-    return widget;
+    return data;
   }
 
-  switch (APP_STATE.widgetMode) {
-    case WIDGET_MODE.INCIDENCE:
-      let data;
-      try {
-        data = await DataService.loadData(location);
-      } catch {
-        Logger.log("INCIDENCE WIDGET (S): COULD NOT LOAD DATA");
-      }
-      createIncidenceWidget(widget, data, customLandkreisName, isLocationFlexible, location.isCached);
-      widget.refreshAfterDate = Utils.getNextUpdate(data);
-      break;
-    case WIDGET_MODE.INFECTIONS:
-      let infectionData;
-      try {
-        infectionData = await DataService.loadAbsoluteCases();
-      } catch {
-        Logger.log("INFECTIONS WIDGET (S): COULD NOT LOAD DATA");
-      }
-      createInfectionsWidget(widget, infectionData);
-      widget.refreshAfterDate = Utils.getNextUpdate(infectionData);
-      break;
-    default:
-      widget.addText("Keine Daten.");
+  async function loadInfectionsData() {
+    let data;
+    try {
+      data = await DataService.loadAbsoluteCases();
+    } catch {
+      Logger.log("COMBINED WIDGET (M): COULD NOT LOAD ABSOLUTE CASES");
+    }
+    return data;
   }
-  return widget;
 }
