@@ -8,7 +8,7 @@
  * Author: https://github.com/marcelrebmann/
  * Source: https://github.com/marcelrebmann/corona-widget-ios
  *
- * Version: 1.4.0
+ * Version: 1.4.1
  */
 
 const CONFIG = {
@@ -1219,7 +1219,7 @@ async function createWidget(size) {
         createIncidenceWidget(widget, data, customLandkreisNames[0], isLocationFlexible, widgetLocation.isCached);
         widget.refreshAfterDate = Utils.getNextUpdate(data);
       } else if (APP_STATE.widgetMode === WIDGET_MODE.INFECTIONS) {
-        let data = loadInfectionsData();
+        let data = await loadInfectionsData();
         createInfectionsWidget(widget, data);
         widget.refreshAfterDate = Utils.getNextUpdate(data);
       } else {
@@ -1250,7 +1250,7 @@ async function createWidget(size) {
         }
         widget.refreshAfterDate = Utils.getNextUpdate(data);
       } else if (APP_STATE.widgetMode === WIDGET_MODE.INFECTIONS) {
-        let data = loadInfectionsData();
+        let data = await loadInfectionsData();
         createInfectionsWidget(widget, data);
         widget.refreshAfterDate = Utils.getNextUpdate(data);
       } else {

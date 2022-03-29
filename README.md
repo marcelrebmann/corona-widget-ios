@@ -201,6 +201,13 @@ Bei Verbesserungsvorschlägen/Bugs/etc gerne einen PR stellen oder ein Issue öf
 
 # Changelog
 
+# Version 1.4.1
+- Behebt einen Fehler beim Datenabruf des INF-Mode
+
+## Version 1.4.0
+- Unterstützung der Widget-Größen Large and Extralarge (XXL)
+- Schriftgrößen für kleinere Gerätegrößen optimiert
+
 ## Version 1.3.1
 - Behebt einen Fehler, bei dem das Impf-Image nicht korrekt geladen werden konnte. 
 
