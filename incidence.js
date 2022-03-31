@@ -141,10 +141,11 @@ class Cache {
   static fileManager;
   static dataCacheFilePath;
   static locationCacheFilePath;
+
   /**
    * Creates a reusable filemanager for accessing related files.
    */
-  static init() {
+  static async init() {
     Cache.fileManager = FileManager.iCloud();
     Cache.dataCacheFilePath = Cache.fileManager.joinPath(
       Cache.fileManager.documentsDirectory(),
@@ -158,6 +159,25 @@ class Cache {
       Cache.fileManager.documentsDirectory(),
       CONFIG.vaccination_image_filename
     );
+
+    if (Cache.fileManager.fileExists(Cache.dataCacheFilePath)) {
+      if (!Cache.fileManager.isFileDownloaded(Cache.dataCacheFilePath)) {
+        try {
+          await Cache.fileManager.downloadFileFromiCloud(Cache.dataCacheFilePath);
+        } catch {
+          Logger.log("Data cache file could not be downloaded from iCloud");
+        }
+      }
+    }
+    if (Cache.fileManager.fileExists(Cache.locationCacheFilePath)) {
+      if (!Cache.fileManager.isFileDownloaded(Cache.locationCacheFilePath)) {
+        try {
+          await Cache.fileManager.downloadFileFromiCloud(Cache.locationCacheFilePath);
+        } catch {
+          Logger.log("Data cache file could not be downloaded from iCloud");
+        }
+      }
+    }
   }
 
   static getLocationHash(location) {
@@ -170,11 +190,12 @@ class Cache {
    */
   static get(location) {
     const locationHash = Cache.getLocationHash(location);
-    const cacheExists = Cache.fileManager.fileExists(Cache.dataCacheFilePath);
-    Logger.log("EXISTS CACHE");
+    const cacheExists = Cache.fileManager.fileExists(Cache.dataCacheFilePath) && Cache.fileManager.isFileDownloaded(Cache.dataCacheFilePath);
+    Logger.log("EXISTING DATA CACHE");
     Logger.log(Cache.dataCacheFilePath);
 
     if (!cacheExists) {
+      Logger.log("Data cache does not exist");
       return null;
     }
     const fileContents = Cache.fileManager.readString(Cache.dataCacheFilePath);
@@ -267,7 +288,7 @@ class Cache {
     }
   }
 }
-Cache.init();
+// Cache.init();
 
 /**
  * This class contains more generic utility functions that perform calculations
@@ -1157,15 +1178,18 @@ const createInfectionsWidget = (widget, data) => {
   );
 };
 
-let widget = await createWidget(config.widgetFamily);
+const widgetSize = config.widgetFamily;
+
+let widget = await createWidget(widgetSize);
 
 if (!config.runsInWidget) {
-  await widget.presentSmall();
+  await widget.presentMedium();
 }
 Script.setWidget(widget);
 Script.complete();
 
 async function createWidget(size) {
+  await Cache.init();
   APP_STATE.isGreaterOrEqualThanMedium = (size === WIDGET_SIZE_MEDIUM || size === WIDGET_SIZE_LARGE || size === WIDGET_SIZE_EXTRA_LARGE);
   APP_STATE.widgetSize = size;
   APP_STATE.widgetMode = WIDGET_MODE.INCIDENCE;
@@ -1325,7 +1349,7 @@ async function createWidget(size) {
     try {
       data = await DataService.loadData(location);
     } catch {
-      Logger.log("INCIDENCE WIDGET (S): COULD NOT LOAD DATA");
+      Logger.log("COULD NOT LOAD INCIDENCE DATA");
     }
     return data;
   }
@@ -1335,7 +1359,7 @@ async function createWidget(size) {
     try {
       data = await DataService.loadAbsoluteCases();
     } catch {
-      Logger.log("COMBINED WIDGET (M): COULD NOT LOAD ABSOLUTE CASES");
+      Logger.log("COULD NOT LOAD ABSOLUTE CASES");
     }
     return data;
   }
