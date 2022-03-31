@@ -8,7 +8,7 @@
  * Author: https://github.com/marcelrebmann/
  * Source: https://github.com/marcelrebmann/corona-widget-ios
  *
- * Version: 1.4.1
+ * Version: 1.4.2
  */
 
 const CONFIG = {

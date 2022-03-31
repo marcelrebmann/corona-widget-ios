@@ -201,7 +201,10 @@ Bei Verbesserungsvorschlägen/Bugs/etc gerne einen PR stellen oder ein Issue öf
 
 # Changelog
 
-# Version 1.4.1
+## Version 1.4.2
+- Verbessert das Laden der Cache-Dateien
+
+## Version 1.4.1
 - Behebt einen Fehler beim Datenabruf des INF-Mode
 
 ## Version 1.4.0
