@@ -247,8 +247,8 @@ export class VaccinationConnector extends Connector {
             vaccCumulatedPreviousDay - (cachedData.vaccination.states[stateId].vacc_delta || 0);
         }
         const vacc_quote = parseFloat(row.Impfquote_gesamt_min1) || 0;
-        const vacc_quote_fully_vaccinated = parseFloat(row.Impfquote_gesamt_voll) || 0;
-        const vacc_quote_booster = parseFloat(row.Impfquote_gesamt_boost) || 0;
+        const vacc_quote_fully_vaccinated = parseFloat(row.Impfquote_gesamt_gi) || 0;
+        const vacc_quote_booster = parseFloat(row.Impfquote_gesamt_boost1) || 0;
 
         const stateExists = !!vaccinationData.states[stateId] && vaccinationData.states[stateId].name === stateName;
 
@@ -268,8 +268,8 @@ export class VaccinationConnector extends Connector {
 
         vaccinationData.country.vacc_delta = null;
         vaccinationData.country.vacc_quote = parseFloat(row.Impfquote_gesamt_min1) || 0;
-        vaccinationData.country.vacc_quote_fully_vaccinated = parseFloat(row.Impfquote_gesamt_voll) || 0;
-        vaccinationData.country.vacc_quote_booster = parseFloat(row.Impfquote_gesamt_boost) || 0;
+        vaccinationData.country.vacc_quote_fully_vaccinated = parseFloat(row.Impfquote_gesamt_gi) || 0;
+        vaccinationData.country.vacc_quote_booster = parseFloat(row.Impfquote_gesamt_boost1) || 0;
         vaccinationData.country.vacc_per_1000 = vaccinationData.country.vacc_quote * 10;
       }
     }

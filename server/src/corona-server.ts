@@ -48,7 +48,7 @@ export class CoronaServer {
     this.dataService = new DataService(filePathToCachedData, pathToBackupData);
     this.jobs = [
       new CronJob("0 02 * * * *", () => this.executeConnectors(ConnectorUpdateType.REGULAR)),
-      new CronJob("0 0 * * * *", () => this.executeConnectors(ConnectorUpdateType.FREQUENT)),
+      new CronJob("0 14 * * * *", () => this.executeConnectors(ConnectorUpdateType.FREQUENT)),
     ];
   }
 
